@@ -1,0 +1,27 @@
+# Ao publicar uma release no GitHub (tag tipo v0.2.0), compila o PokeDeck.exe com o mesmo Dockerfile do PC e anexa à release.
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Compilar (UI, testes e exe)
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          docker build --target export --build-arg VERSION="$VERSION" --output dist .
+
+      - name: Anexar o exe à release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/PokeDeck.exe --clobber

@@ -25,7 +25,7 @@ internal sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "PokeDeck";
+        Text = $"PokeDeck {typeof(MainForm).Assembly.GetName().Version?.ToString(3)}";
         BackColor = System.Drawing.Color.FromArgb(18, 20, 26);
         StartPosition = FormStartPosition.CenterScreen;
         Size = new System.Drawing.Size(1500, 950);

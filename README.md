@@ -13,6 +13,12 @@ Twitch/Kick, baú da Twitch, resgate automático do bônus e guarda do bônus. P
 Sai sempre em `dist\PokeDeck.exe` (pasta fora do git; feche o app antes de compilar). Um arquivo, sem instalar .NET. Precisa do WebView2 Runtime (já vem no Windows 10/11).
 O build roda os testes do núcleo antes de gerar o exe.
 
+## Releases
+
+Publicar uma release no GitHub (Releases → *Draft a new release*, tag `v0.2.0`, *Publish*) dispara
+`.github/workflows/release.yml`: compila com o mesmo Dockerfile e anexa o `PokeDeck.exe` à release para download.
+A versão da tag aparece no título da janela. Para atualizar: feche o app e troque o exe; logins e config ficam.
+
 ## Usar
 
 1. Abra o exe. Entre no jogo em cada conta (o login fica no perfil da conta).
