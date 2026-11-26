@@ -1,0 +1,8 @@
+bin/
+obj/
+dist/
+node_modules/
+ui/dist/
+src/PokeDeck/ui-dist/
+*.user
+.vs/

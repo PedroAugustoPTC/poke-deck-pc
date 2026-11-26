@@ -1,0 +1,327 @@
+<script>
+  import { onMount, tick } from 'svelte';
+
+  const host = window.chrome?.webview;
+  const send = (o) => host?.postMessage(o);
+
+  let config = $state(null);
+  let status = $state({ accounts: [], log: [], twitchLive: {}, kickLive: {} });
+  let panel = $state(null); // null | 'config' | 'log'
+  let draft = $state(null);
+  let tab = $state(0);
+  let twitchText = $state('');
+  let kickText = $state('');
+  const bodies = [];
+
+  host?.addEventListener('message', (e) => {
+    const m = e.data;
+    if (m?.t === 'config') config = m.config;
+    else if (m?.t === 'status') status = m;
+  });
+
+  const acc = (i) => status.accounts.find((a) => a.i === i) ?? {};
+  const shown = $derived(
+    !config ? [] : config.Layout === 'focus' ? [config.Focus] : config.Accounts.map((a, i) => (a.On ? i : -1)).filter((i) => i >= 0),
+  );
+  const off = $derived(!config ? [] : config.Accounts.map((a, i) => (a.On ? -1 : i)).filter((i) => i >= 0));
+
+  // As páginas do jogo são janelas nativas por cima destas vagas: o app precisa saber onde cada uma está.
+  function report() {
+    if (!config) return;
+    const slots = panel ? [] : shown.map((i) => {
+      const r = bodies[i]?.getBoundingClientRect();
+      return r && r.width > 0 ? { i, x: r.left, y: r.top, w: r.width, h: r.height } : null;
+    }).filter(Boolean);
+    send({ t: 'layout', dpr: window.devicePixelRatio, slots });
+  }
+  $effect(() => {
+    void config?.Layout, config?.Focus, panel, shown.length;
+    tick().then(() => requestAnimationFrame(report));
+  });
+
+  onMount(() => {
+    send({ t: 'ready' });
+    const ro = new ResizeObserver(() => requestAnimationFrame(report));
+    ro.observe(document.body);
+    return () => ro.disconnect();
+  });
+
+  function save(next) {
+    send({ t: 'config', config: $state.snapshot(next) });
+  }
+  function setLayout(layout, focus = config.Focus) {
+    save({ ...$state.snapshot(config), Layout: layout, Focus: focus });
+  }
+  function toggleAll(key) {
+    const c = $state.snapshot(config);
+    const on = !c.Accounts.filter((a) => a.On).every((a) => a[key]);
+    c.Accounts.forEach((a) => (a[key] = on));
+    save(c);
+  }
+  function setAccount(i, patch) {
+    const c = $state.snapshot(config);
+    Object.assign(c.Accounts[i], patch);
+    save(c);
+  }
+
+  function openConfig() {
+    draft = $state.snapshot(config);
+    copied = null;
+    twitchText = draft.TwitchChannels.join('\n');
+    kickText = draft.KickChannels.join('\n');
+    panel = 'config';
+  }
+  let copied = $state(null);
+  function copyRestock(from) {
+    const rules = $state.snapshot(draft.Accounts[from].Restock);
+    draft.Accounts.forEach((a, i) => {
+      if (i !== from) a.Restock = structuredClone(rules);
+    });
+    copied = from;
+  }
+
+  function saveConfig() {
+    const lines = (t) => t.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
+    draft.TwitchChannels = lines(twitchText);
+    draft.KickChannels = lines(kickText);
+    for (const a of draft.Accounts) {
+      a.RedeemTwitch ||= null;
+      a.RedeemKick ||= null;
+    }
+    save(draft);
+    panel = null;
+  }
+
+  const fmt = (n) => (n == null ? '—' : Math.round(n).toLocaleString('pt-BR'));
+  const left = (s) => (!s ? '—' : s >= 3600 ? `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}` : `${Math.max(1, Math.floor(s / 60))}min`);
+  const PHASE = { game: ['no jogo', 'ok'], login: ['tela de login', 'warn'], loading: ['carregando…', 'muted'], failed: ['não carregou', 'bad'], elsewhere: ['aberta em outro lugar', 'bad'], off: ['desligada', 'muted'] };
+  const KINDS = [['', 'não resgatar'], ['xp', '+15% XP (300)'], ['captura', '+15% Captura (500)'], ['shiny', '+15% Shiny (1000)']];
+</script>
+
+<div class="app">
+  <header class="bar">
+    <strong class="logo">PokeDeck</strong>
+    {#if config}
+      <div class="group">
+        <button class:on={config.Layout === 'grid'} onclick={() => setLayout('grid')}>Grade</button>
+        <button class:on={config.Layout === 'cols'} onclick={() => setLayout('cols')}>Colunas</button>
+      </div>
+      <div class="group">
+        <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Ultra)} onclick={() => toggleAll('Ultra')} title="Modo ULTRA Economia do jogo (recarrega as contas)">⚡ ULTRA</button>
+        <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Economy)} onclick={() => toggleAll('Economy')} title="Modo Economia do jogo (recarrega as contas)">🔋 Economia</button>
+        <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Muted)} onclick={() => toggleAll('Muted')}>🔇 Mudo</button>
+        {#if off.length}
+          <button onclick={() => save({ ...$state.snapshot(config), Accounts: config.Accounts.map((a) => ({ ...$state.snapshot(a), On: true })) })}>⏻ Ligar todas</button>
+        {:else}
+          <button onclick={() => save({ ...$state.snapshot(config), Accounts: config.Accounts.map((a) => ({ ...$state.snapshot(a), On: false })) })}>⏻ Desligar todas</button>
+        {/if}
+      </div>
+      <span class="spacer"></span>
+      {#each off as i}
+        <button onclick={() => setAccount(i, { On: true })} title="Ligar">⏻ {config.Accounts[i].Name}</button>
+      {/each}
+      <button onclick={() => send({ t: 'checkLives' })} title="Conferir agora quem está ao vivo">⟳ Lives</button>
+      <button class:on={panel === 'log'} onclick={() => (panel = panel === 'log' ? null : 'log')}>Registro</button>
+      <button class:on={panel === 'config'} onclick={() => (panel === 'config' ? (panel = null) : openConfig())}>⚙ Config</button>
+    {/if}
+  </header>
+
+  {#if config}
+    <main class="deck {config.Layout}" style:--n={shown.length}>
+      {#each shown as i (i)}
+        {@const a = acc(i)}
+        {@const c = config.Accounts[i]}
+        {@const ph = PHASE[a.phase] ?? PHASE.loading}
+        <section class="pane">
+          <div class="head">
+            <span class="dot {ph[1]}" title={ph[0]}></span>
+            <strong>{c.Name}</strong>
+            {#if a.nick}<span class="muted">{a.nick}{a.vip ? ' · VIP' : ''}</span>{/if}
+            <span class="chip gold" title="Ouro">💰 {fmt(a.gold)}</span>
+            {#if a.stock}
+              <span class="chip" class:active={c.Restock.On} title={c.Restock.On ? `Recompra ligada${a.restock?.paused ? ' (pausada)' : ''}` : 'Recompra desligada'}>
+                🛒 ⚪{fmt(a.stock.balls)} 🧪{fmt(a.stock.potions)} 💊{fmt(a.stock.revives)}
+              </span>
+            {/if}
+            {#if a.bonus?.twitch && c.RedeemTwitch}<span class="chip tw" title="Bônus da Twitch que falta">T {left(a.bonus.twitch[c.RedeemTwitch])}</span>{/if}
+            {#if a.bonus?.kick && c.RedeemKick}<span class="chip kk" title="Bônus da Kick que falta">K {left(a.bonus.kick[c.RedeemKick])}</span>{/if}
+            <span class="spacer"></span>
+            {#if c.Lives}
+              <span class="lives" title={[...(a.lives?.twitch ?? []).map((l) => `Twitch ${l.channel}: ${l.watch} ${l.points}`), ...(a.lives?.kick ?? []).map((l) => `Kick ${l.channel}: ${l.watch} ${l.points}`), a.lives?.twitchStopped, a.lives?.kickStopped, a.lives?.pubsub].filter(Boolean).join('\n') || 'nenhuma live aberta'}>
+                <button class="mini tw" class:dim={!a.lives?.twitchLogged} onclick={() => send({ t: 'login', i, site: 'twitch' })} title="Entrar na Twitch nesta conta">T {a.lives?.twitch?.length ?? 0}</button>
+                <button class="mini kk" class:dim={!a.lives?.kickLogged} onclick={() => send({ t: 'login', i, site: 'kick' })} title="Entrar na Kick nesta conta">K {a.lives?.kick?.length ?? 0}</button>
+              </span>
+            {/if}
+            <button class="mini" onclick={() => setAccount(i, { Restock: { ...c.Restock, On: !c.Restock.On } })} class:on={c.Restock.On} title="Recompra">🛒</button>
+            <button class="mini" onclick={() => send({ t: 'reload', i })} title="Recarregar">⟳</button>
+            <button class="mini" onclick={() => (config.Layout === 'focus' ? setLayout('grid') : setLayout('focus', i))} title="Ampliar / voltar">⤢</button>
+            <button class="mini" onclick={() => setAccount(i, { On: false })} title="Desligar esta conta">⏻</button>
+          </div>
+          <div class="body" bind:this={bodies[i]}>
+            {#if panel}<div class="cover">{ph[0]}</div>{/if}
+          </div>
+        </section>
+      {:else}
+        <div class="empty">Todas as contas desligadas. Ligue uma na barra de cima.</div>
+      {/each}
+    </main>
+  {/if}
+
+  {#if panel === 'log'}
+    <div class="overlay">
+      <div class="sheet">
+        <h2>Registro</h2>
+        <pre class="log">{status.log.join('\n')}</pre>
+      </div>
+    </div>
+  {/if}
+
+  {#if panel === 'config' && draft}
+    <div class="overlay">
+      <div class="sheet">
+        <nav class="tabs">
+          {#each draft.Accounts as a, i}<button class:on={tab === i} onclick={() => (tab = i)}>{a.Name}</button>{/each}
+          <button class:on={tab === 'lives'} onclick={() => (tab = 'lives')}>Lives</button>
+          <button class:on={tab === 'timing'} onclick={() => (tab = 'timing')}>Tempos</button>
+          <span class="spacer"></span>
+          <button onclick={() => (panel = null)}>Cancelar</button>
+          <button class="on" onclick={saveConfig}>Salvar</button>
+        </nav>
+
+        {#if typeof tab === 'number'}
+          {@const a = draft.Accounts[tab]}
+          {@const s = acc(tab)}
+          <div class="form">
+            <h3>Conta</h3>
+            <label>Nome <input bind:value={a.Name} /></label>
+            <label><input type="checkbox" bind:checked={a.On} /> Ligada</label>
+            <label><input type="checkbox" bind:checked={a.Ultra} /> Modo ULTRA</label>
+            <label><input type="checkbox" bind:checked={a.Economy} /> Modo Economia</label>
+            <label><input type="checkbox" bind:checked={a.ReduceMotion} /> Menos animações</label>
+            <label><input type="checkbox" bind:checked={a.Muted} /> Mudo</label>
+            <label>Zoom <input type="number" step="0.1" min="0.5" max="1.5" bind:value={a.Zoom} /></label>
+
+            <h3>Recompra</h3>
+            <button onclick={() => copyRestock(tab)} title="Copia estas regras de recompra (inclusive ligada/desligada) para as outras contas; salve para valer">
+              {copied === tab ? '✓ Copiado (clique em Salvar)' : 'Aplicar esta recompra a todas as contas'}
+            </button>
+            <label><input type="checkbox" bind:checked={a.Restock.On} /> Ligada</label>
+            <label>Ouro mínimo <input type="number" min="0" bind:value={a.Restock.GoldFloor} /></label>
+            <label><input type="checkbox" bind:checked={a.Restock.PotionFirst} /> Poção da recompra em 1º no "Usar Poções"</label>
+            <table class="rules">
+              <thead><tr><th></th><th>Item</th><th>Quando tiver menos de</th><th>Comprar</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><input type="checkbox" bind:checked={a.Restock.Balls.On} /> Pokebola</td>
+                  <td>
+                    {#if s.ballCatalog?.length}
+                      <select bind:value={a.Restock.Balls.Id}>{#each s.ballCatalog as b}<option value={b.id}>{b.name} ({fmt(b.price)})</option>{/each}</select>
+                    {:else}<input type="number" min="1" bind:value={a.Restock.Balls.Id} title="Id da pokebola (abra o jogo para ver a lista)" />{/if}
+                  </td>
+                  <td><input type="number" min="0" bind:value={a.Restock.Balls.Below} /></td>
+                  <td><input type="number" min="0" bind:value={a.Restock.Balls.Buy} /></td>
+                </tr>
+                <tr>
+                  <td><input type="checkbox" bind:checked={a.Restock.Potions.On} /> Poções</td>
+                  <td>
+                    <select bind:value={a.Restock.Potions.Id}>
+                      <option value={0}>melhor custo-benefício</option>
+                      {#each s.potionList ?? [] as p}<option value={Number(p.id)}>{p.name} ({fmt(p.price)})</option>{/each}
+                    </select>
+                  </td>
+                  <td><input type="number" min="0" bind:value={a.Restock.Potions.Below} /></td>
+                  <td><input type="number" min="0" bind:value={a.Restock.Potions.Buy} /></td>
+                </tr>
+                <tr>
+                  <td><input type="checkbox" bind:checked={a.Restock.Revives.On} /> Revives</td>
+                  <td class="muted">o mais barato</td>
+                  <td><input type="number" min="0" bind:value={a.Restock.Revives.Below} /></td>
+                  <td><input type="number" min="0" bind:value={a.Restock.Revives.Buy} /></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>Lives e bônus</h3>
+            <label><input type="checkbox" bind:checked={a.Lives} /> Esta conta assiste às lives (a vinculada à Twitch/Kick)</label>
+            <label>Resgatar na Twitch
+              <select bind:value={a.RedeemTwitch}>{#each KINDS as [v, t]}<option value={v || null}>{t}</option>{/each}</select>
+            </label>
+            <label>Resgatar na Kick
+              <select bind:value={a.RedeemKick}>{#each KINDS as [v, t]}<option value={v || null}>{t}</option>{/each}</select>
+            </label>
+            <label><input type="checkbox" bind:checked={a.Guard} /> Guarda do bônus (perto de vencer, resgata num canal com pontos parados)</label>
+          </div>
+        {:else if tab === 'lives'}
+          <div class="form">
+            <label><input type="checkbox" bind:checked={draft.ClaimChest} /> Pegar o baú da Twitch (+50)</label>
+            <label>Lives da Twitch por conta <input type="number" min="0" max="5" bind:value={draft.TwitchLives} /></label>
+            <label>Lives da Kick por conta <input type="number" min="0" max="5" bind:value={draft.KickLives} /> <span class="muted">(a Kick só conta 2)</span></label>
+            <div class="cols2">
+              <div><h3>Canais da Twitch (prioridade)</h3><textarea rows="14" bind:value={twitchText}></textarea></div>
+              <div><h3>Canais da Kick (prioridade)</h3><textarea rows="14" bind:value={kickText}></textarea></div>
+            </div>
+            <p class="muted">
+              Ao vivo agora — Twitch: {Object.entries(status.twitchLive ?? {}).filter(([, v]) => v).map(([k]) => k).join(', ') || 'nenhum'} ·
+              Kick: {Object.entries(status.kickLive ?? {}).filter(([, v]) => v).map(([k]) => k).join(', ') || 'nenhum'}
+            </p>
+          </div>
+        {:else}
+          <div class="form">
+            <p class="muted">Todo intervalo varia ± a variação, para nada sair em ritmo exato.</p>
+            <label>Variação (0–0,5) <input type="number" step="0.05" min="0" max="0.5" bind:value={draft.Timing.JitterPct} /></label>
+            <label>Conferir quem está ao vivo (s) <input type="number" min="60" bind:value={draft.Timing.LiveCheckSec} /></label>
+            <label>Pontos/baú da Twitch (s) <input type="number" min="60" bind:value={draft.Timing.TwitchPointsSec} /></label>
+            <label>Pontos da Kick (s) <input type="number" min="60" bind:value={draft.Timing.KickPointsSec} /></label>
+            <label>Guarda: conferir a cada (s) <input type="number" min="60" bind:value={draft.Timing.GuardSec} /></label>
+            <label>Guarda: agir quando faltar menos de (min) <input type="number" min="5" bind:value={draft.Timing.GuardThresholdMin} /></label>
+            <label>Compras: intervalo entre pedidos (s) <input type="number" min="2" bind:value={draft.Timing.BuyGapMinSec} /> a <input type="number" min="2" bind:value={draft.Timing.BuyGapMaxSec} /></label>
+            <label>Resgate recusado: tentar de novo em (min) <input type="number" min="5" bind:value={draft.Timing.RedeemRetryMin} /></label>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
+</div>
+
+<style>
+  .app { display: flex; flex-direction: column; height: 100%; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .logo { color: var(--accent); letter-spacing: 0.5px; }
+  .group { display: flex; gap: 4px; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+
+  .deck { flex: 1; display: grid; gap: 6px; padding: 6px; min-height: 0; }
+  .deck.grid { grid-template-columns: repeat(min(var(--n), 2), 1fr); grid-auto-rows: 1fr; }
+  .deck.cols { grid-template-columns: repeat(var(--n), 1fr); }
+  .deck.focus { grid-template-columns: 1fr; }
+  .pane { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .head { display: flex; align-items: center; gap: 6px; padding: 4px 6px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+  .body { flex: 1; position: relative; min-height: 0; background: var(--bg); }
+  .cover { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
+  .empty { display: grid; place-items: center; color: var(--muted); }
+
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); }
+  .dot.warn { background: var(--warn); }
+  .dot.bad { background: var(--bad); }
+  .chip { padding: 1px 7px; border-radius: 10px; background: var(--panel-2); color: var(--muted); white-space: nowrap; }
+  .chip.gold { color: var(--accent); }
+  .chip.active { color: var(--text); }
+  .chip.tw, .mini.tw { color: var(--twitch); }
+  .chip.kk, .mini.kk { color: var(--kick); }
+  .mini { padding: 1px 7px; }
+  .mini.dim { opacity: 0.45; }
+  .lives { display: inline-flex; gap: 4px; }
+
+  .overlay { position: fixed; inset: 44px 0 0 0; background: rgba(10, 11, 15, 0.92); display: grid; place-items: center; }
+  .sheet { width: min(980px, 96vw); max-height: 92%; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; user-select: text; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; position: sticky; top: -14px; background: var(--panel); padding: 6px 0 10px; }
+  .form { display: flex; flex-direction: column; gap: 9px; align-items: flex-start; }
+  h2, h3 { margin: 8px 0 2px; font-weight: 600; }
+  h3 { color: var(--accent); font-size: 13px; }
+  .rules td, .rules th { padding: 3px 8px 3px 0; text-align: left; font-weight: normal; color: var(--muted); }
+  .rules td { color: var(--text); }
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; }
+  .log { font: 12px/1.45 Consolas, monospace; white-space: pre-wrap; margin: 0; }
+</style>

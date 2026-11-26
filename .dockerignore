@@ -1,0 +1,7 @@
+**/bin
+**/obj
+**/node_modules
+dist
+ui/dist
+src/PokeDeck/ui-dist
+.git
