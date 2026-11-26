@@ -25,12 +25,15 @@ internal sealed class MainForm : Form
 
     public MainForm()
     {
+        Icon = Program.AppIcon;
         Text = $"PokeDeck {typeof(MainForm).Assembly.GetName().Version?.ToString(3)}";
         BackColor = System.Drawing.Color.FromArgb(18, 20, 26);
         StartPosition = FormStartPosition.CenterScreen;
         Size = new System.Drawing.Size(1500, 950);
         Directory.CreateDirectory(_root);
         Log.FilePath = Path.Combine(_root, "pokedeck.log");
+        Log.RedeemPath = Path.Combine(_root, "resgates.log");
+        Log.LoadRedeems();
         Log.Write(null, "abrindo o PokeDeck");
         Config = Config.Load(ConfigPath);
         foreach (var a in Config.Accounts)
@@ -157,6 +160,7 @@ internal sealed class MainForm : Form
         t = "status",
         accounts = _accounts.Select(a => a.Snapshot()),
         log = Log.Lines().Take(150),
+        redeems = Log.RedeemLines(),
         twitchLive = _twitchLive,
         kickLive = _kickLive,
     });
@@ -385,6 +389,7 @@ internal sealed class MainForm : Form
             Text = $"{ext.Name} — {Config.Accounts[index].Name}",
             Size = ext.Window ? new System.Drawing.Size(1160, 760) : new System.Drawing.Size(440, 620),
             StartPosition = FormStartPosition.CenterParent,
+            Icon = Program.AppIcon,
         };
         var view = new WebView2 { Dock = DockStyle.Fill };
         form.Controls.Add(view);
@@ -400,7 +405,7 @@ internal sealed class MainForm : Form
     {
         if (_env is null)
             return;
-        var form = new Form { Text = $"Entrar na {(site == "kick" ? "Kick" : "Twitch")} — {Config.Accounts[index].Name}", Size = new System.Drawing.Size(1000, 800), StartPosition = FormStartPosition.CenterParent };
+        var form = new Form { Text = $"Entrar na {(site == "kick" ? "Kick" : "Twitch")} — {Config.Accounts[index].Name}", Size = new System.Drawing.Size(1000, 800), StartPosition = FormStartPosition.CenterParent, Icon = Program.AppIcon };
         var view = new WebView2 { Dock = DockStyle.Fill };
         form.Controls.Add(view);
         form.FormClosed += async (_, _) => await CheckLivesAsync();

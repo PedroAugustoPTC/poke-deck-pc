@@ -14,6 +14,9 @@
   const bodies = [];
 
   let fullscreen = $state(false);
+  let logTab = $state('redeems');
+  let logAccount = $state(-1);
+  let logSite = $state('');
   window.addEventListener('keydown', (e) => {
     if (e.key === 'F11') {
       e.preventDefault();
@@ -123,7 +126,14 @@
 
 <div class="app">
   <header class="bar">
-    <strong class="logo">PokeDeck</strong>
+    <strong class="logo">
+      <svg width="20" height="20" viewBox="0 0 160 160" aria-hidden="true">
+        <rect width="160" height="160" rx="36" fill="#1b1e27" /><rect x="30" y="30" width="46" height="46" rx="10" fill="#f2c94c" />
+        <rect x="84" y="30" width="46" height="46" rx="10" fill="#3a4157" /><rect x="30" y="84" width="46" height="46" rx="10" fill="#3a4157" />
+        <rect x="84" y="84" width="46" height="46" rx="10" fill="#3a4157" /><circle cx="107" cy="107" r="7" fill="#a970ff" /><circle cx="53" cy="107" r="7" fill="#53fc18" />
+      </svg>
+      PokeDeck
+    </strong>
     {#if config}
       <div class="group">
         <button class:on={config.Layout === 'grid'} onclick={() => setLayout('grid')}>Grade</button>
@@ -197,8 +207,40 @@
   {#if panel === 'log'}
     <div class="overlay">
       <div class="sheet">
-        <h2>Registro</h2>
-        <pre class="log">{status.log.join('\n')}</pre>
+        <nav class="tabs">
+          <button class:on={logTab === 'redeems'} onclick={() => (logTab = 'redeems')}>Resgates e lives</button>
+          <button class:on={logTab === 'all'} onclick={() => (logTab = 'all')}>Geral</button>
+          {#if logTab === 'redeems'}
+            <span class="spacer"></span>
+            <select bind:value={logAccount}>
+              <option value={-1}>Todas as contas</option>
+              {#each config.Accounts as a, i}<option value={i}>{a.Name}</option>{/each}
+            </select>
+            <select bind:value={logSite}><option value="">Twitch e Kick</option><option>Twitch</option><option>Kick</option></select>
+          {/if}
+        </nav>
+        {#if logTab === 'redeems'}
+          {@const rows = (status.redeems ?? []).filter((r) => (logAccount < 0 || r.Account === logAccount) && (!logSite || r.Site === logSite))}
+          <table class="grid redeems">
+            <thead><tr><th>Hora</th><th>Conta</th><th>Site</th><th>Canal</th><th>Evento</th><th>Detalhe</th></tr></thead>
+            <tbody>
+              {#each rows as r}
+                <tr>
+                  <td class="muted">{r.At}</td>
+                  <td>{config.Accounts[r.Account]?.Name ?? `Conta ${r.Account + 1}`}</td>
+                  <td class={r.Site === 'Twitch' ? 'tw' : 'kk'}>{r.Site}</td>
+                  <td>{r.Channel}</td>
+                  <td><span class="kind k-{r.Kind.replace(' ', '-')}">{r.Kind}</span></td>
+                  <td>{r.Text}</td>
+                </tr>
+              {:else}
+                <tr><td colspan="6" class="muted">Nada ainda. Resgates, baús, recusas e a guarda aparecem aqui.</td></tr>
+              {/each}
+            </tbody>
+          </table>
+        {:else}
+          <pre class="log">{status.log.join('\n')}</pre>
+        {/if}
       </div>
     </div>
   {/if}
@@ -269,30 +311,62 @@
               </tbody>
             </table>
 
-            <h3>Lives e bônus</h3>
-            <label><input type="checkbox" bind:checked={a.Lives} /> Esta conta assiste às lives (a vinculada à Twitch/Kick)</label>
-            <label>Resgatar na Twitch
-              <select bind:value={a.RedeemTwitch}>{#each KINDS as [v, t]}<option value={v || null}>{t}</option>{/each}</select>
-            </label>
-            <label>Resgatar na Kick
-              <select bind:value={a.RedeemKick}>{#each KINDS as [v, t]}<option value={v || null}>{t}</option>{/each}</select>
-            </label>
-            <label><input type="checkbox" bind:checked={a.Guard} /> Guarda do bônus (perto de vencer, resgata num canal com pontos parados)</label>
+            <p class="muted">Lives, resgates e guarda desta conta ficam na aba <strong>Lives</strong>.</p>
           </div>
         {:else if tab === 'lives'}
-          <div class="form">
-            <label><input type="checkbox" bind:checked={draft.ClaimChest} /> Pegar o baú da Twitch (+50)</label>
-            <label>Lives da Twitch por conta <input type="number" min="0" max="5" bind:value={draft.TwitchLives} /></label>
-            <label>Lives da Kick por conta <input type="number" min="0" max="5" bind:value={draft.KickLives} /> <span class="muted">(a Kick só conta 2)</span></label>
-            <div class="cols2">
-              <div><h3>Canais da Twitch (prioridade)</h3><textarea rows="14" bind:value={twitchText}></textarea></div>
-              <div><h3>Canais da Kick (prioridade)</h3><textarea rows="14" bind:value={kickText}></textarea></div>
+          {@const lines = (t) => t.split(/[\s,]+/).filter(Boolean)}
+          {@const liveNow = (map) => Object.entries(map ?? {}).filter(([, v]) => v).map(([k]) => k)}
+          <p class="muted">Um canal por linha, na ordem de prioridade. O app abre as primeiras que estiverem no ar.</p>
+          <div class="cols2">
+            <div class="card">
+              <div class="card-head"><span class="pill tw">Twitch</span> canais, em ordem de prioridade <span class="spacer"></span><span class="muted">{lines(twitchText).length} canais</span></div>
+              <textarea rows="12" bind:value={twitchText}></textarea>
+              <div class="row between">
+                <span>Lives abertas por conta</span>
+                <span class="stepper"><button onclick={() => (draft.TwitchLives = Math.max(0, draft.TwitchLives - 1))}>−</button><b>{draft.TwitchLives}</b><button onclick={() => (draft.TwitchLives = Math.min(5, draft.TwitchLives + 1))}>+</button></span>
+              </div>
+              <div class="row between">
+                <label><input type="checkbox" bind:checked={draft.ClaimChest} /> Pegar o baú de bônus sozinho</label>
+                <span class="muted">+50 a cada ~15 min</span>
+              </div>
+              <span class="muted small">No ar agora: {liveNow(status.twitchLive).join(', ') || 'nenhum'}</span>
             </div>
-            <p class="muted">
-              Ao vivo agora — Twitch: {Object.entries(status.twitchLive ?? {}).filter(([, v]) => v).map(([k]) => k).join(', ') || 'nenhum'} ·
-              Kick: {Object.entries(status.kickLive ?? {}).filter(([, v]) => v).map(([k]) => k).join(', ') || 'nenhum'}
-            </p>
+            <div class="card">
+              <div class="card-head"><span class="pill kk">Kick</span> canais, em ordem de prioridade <span class="spacer"></span><span class="muted">{lines(kickText).length} canais</span></div>
+              <textarea rows="12" bind:value={kickText}></textarea>
+              <div class="row between">
+                <span>Lives abertas por conta <span class="muted">(a Kick só conta 2)</span></span>
+                <span class="stepper"><button onclick={() => (draft.KickLives = Math.max(0, draft.KickLives - 1))}>−</button><b>{draft.KickLives}</b><button onclick={() => (draft.KickLives = Math.min(5, draft.KickLives + 1))}>+</button></span>
+              </div>
+              <span class="muted small">No ar agora: {liveNow(status.kickLive).join(', ') || 'nenhum'}</span>
+            </div>
           </div>
+          <div class="card">
+            <div class="card-head"><strong>Por conta</strong><span class="spacer"></span><span class="muted">vincule a Kick e a Twitch no jogo em cada conta que resgata</span></div>
+            <table class="grid">
+              <thead>
+                <tr>
+                  <th>Conta</th>
+                  <th title="A conta assiste às lives com a Twitch/Kick logada nela">Assiste às lives</th>
+                  <th title="O bônus do PokeIdle resgatado com os pontos dos canais da Kick">Resgatar na Kick</th>
+                  <th title="O bônus do PokeIdle resgatado com os pontos dos canais da Twitch">Resgatar na Twitch</th>
+                  <th title="Perto de vencer, resgata num canal com pontos parados">Guarda</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each draft.Accounts as a}
+                  <tr>
+                    <td>{a.Name}</td>
+                    <td><input type="checkbox" class="switch" bind:checked={a.Lives} /></td>
+                    <td><select bind:value={a.RedeemKick}>{#each KINDS as [v, t]}<option value={v || null}>{t}</option>{/each}</select></td>
+                    <td><select bind:value={a.RedeemTwitch}>{#each KINDS as [v, t]}<option value={v || null}>{t}</option>{/each}</select></td>
+                    <td><input type="checkbox" class="switch" bind:checked={a.Guard} /></td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+          <p class="muted small">As lives abertas são reconferidas ao salvar.</p>
         {:else if tab === 'ext'}
           <div class="form">
             <p class="muted">Cada conta tem as próprias extensões. Cole o link da Chrome Web Store, marque as contas e instale. A conta recarrega para a extensão entrar.</p>
@@ -340,7 +414,7 @@
 <style>
   .app { display: flex; flex-direction: column; height: 100%; }
   .bar { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
-  .logo { color: var(--accent); letter-spacing: 0.5px; }
+  .logo { color: var(--accent); letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 7px; }
   .group { display: flex; gap: 4px; }
   .spacer { flex: 1; }
   .muted { color: var(--muted); }
@@ -378,6 +452,31 @@
   .rules td, .rules th { padding: 3px 8px 3px 0; text-align: left; font-weight: normal; color: var(--muted); }
   .rules td { color: var(--text); }
   .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; }
+  .card { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .card-head { display: flex; align-items: center; gap: 8px; }
+  .pill { padding: 2px 10px; border-radius: 10px; background: var(--panel-2); }
+  .pill.tw { color: var(--twitch); }
+  .pill.kk { color: var(--kick); }
+  .between { justify-content: space-between; }
+  .small { font-size: 12px; }
+  .stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; }
+  .stepper button { border: none; border-radius: 0; background: transparent; padding: 3px 12px; }
+  .stepper b { min-width: 36px; text-align: center; font-weight: 600; }
+  .grid { width: 100%; border-collapse: collapse; }
+  .grid th { text-align: left; font-weight: normal; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .grid td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .grid select { width: 100%; }
+  .switch { appearance: none; width: 34px; height: 18px; border-radius: 9px; background: var(--line); position: relative; cursor: pointer; border: none; padding: 0; }
+  .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: left 0.15s; }
+  .switch:checked { background: #6c4bd8; }
+  .switch:checked::after { left: 18px; background: #fff; }
+  .redeems td.tw { color: var(--twitch); }
+  .redeems td.kk { color: var(--kick); }
+  .kind { padding: 1px 8px; border-radius: 9px; background: var(--panel-2); white-space: nowrap; }
+  .k-resgate, .k-baú { color: var(--ok); }
+  .k-recusado, .k-baú-recusado, .k-devolvido { color: var(--bad); }
+  .k-gasto-fora { color: var(--warn); }
+  .k-guarda { color: var(--accent); }
   .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .wide { width: 100%; }
   .grow { flex: 1; }

@@ -4,6 +4,9 @@ namespace PokeDeck;
 
 internal static class Program
 {
+    /// <summary>O ícone do app (o mesmo do exe) para a janela, a barra de tarefas e as janelas auxiliares.</summary>
+    public static readonly Icon AppIcon = new(typeof(Program).Assembly.GetManifestResourceStream("icon.ico")!);
+
     [STAThread]
     private static void Main()
     {

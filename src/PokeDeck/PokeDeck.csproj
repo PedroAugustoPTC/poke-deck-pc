@@ -8,6 +8,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <AssemblyName>PokeDeck</AssemblyName>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
@@ -17,6 +18,7 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="game-bridge.js" LogicalName="game-bridge.js" />
+    <EmbeddedResource Include="icon.ico" LogicalName="icon.ico" />
     <!-- A interface (build do Svelte); o Dockerfile copia ui/dist para cá. -->
     <EmbeddedResource Include="ui-dist\**\*" LogicalName="ui/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>

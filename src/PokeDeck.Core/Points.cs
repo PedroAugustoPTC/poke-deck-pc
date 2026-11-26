@@ -45,10 +45,10 @@ public sealed class Points
         _channels.TryGetValue(ch, out var c) && c is { Points: int p, Cost: int cost, RedeemedAt: DateTime at } && _now() - at < RefundWindow
             ? p + cost / 2 : null;
 
-    /// <summary>Lê o JSON que o script devolveu; devolve as linhas para o registro.</summary>
-    public List<string> Apply(string ch, string json)
+    /// <summary>Lê o JSON que o script devolveu; devolve o que aconteceu (tipo, texto) para o registro dos resgates.</summary>
+    public List<(string Kind, string Text)> Apply(string ch, string json)
     {
-        var notes = new List<string>();
+        var notes = new List<(string Kind, string Text)>();
         var c = Of(ch);
         var now = _now();
         JsonElement r;
@@ -70,14 +70,14 @@ public sealed class Points
         if (points is int pts && RefundAt(ch) is int refund && pts >= refund)
         {
             Stopped = "os pontos do resgate voltaram (o site está vinculado no jogo?)";
-            notes.Add($"{Site} {ch}: {Stopped}; parei de resgatar nesta conta");
+            notes.Add(("devolvido", $"{Stopped}; parei de resgatar nesta conta"));
         }
         if (Is(r, "claimed"))
-            notes.Add($"{Site} {ch}: pegou o baú (+50)");
+            notes.Add(("baú", "pegou o baú (+50)"));
         if (Str(r, "claimError") is string ce)
         {
             c.ClaimRetryAt = now + RetryWait;
-            notes.Add($"{Site} {ch}: baú recusado ({ce})");
+            notes.Add(("baú recusado", $"baú recusado ({ce})"));
         }
         if (Int(r, "cost") is int cost)
             c.Cost = cost;
@@ -88,13 +88,16 @@ public sealed class Points
             c.RedeemedAt = now;
             if (points is int p2 && c.Cost is int k)
                 points = p2 - k;
-            notes.Add($"{Site} {ch}: resgatou {title}");
+            notes.Add(("resgate", $"resgatou {title}" + (points is int left ? $" (saldo {left})" : "")));
         }
         else if (r.TryGetProperty("refused", out _) || r.TryGetProperty("redeemed", out _))
         {
             c.RetryAt = now + RetryWait;
-            notes.Add($"{Site} {ch}: resgate recusado ({Str(r, "refused") ?? "erro " + Int(r, "status")}); tento de novo em {RetryWait.TotalMinutes:0} min");
+            notes.Add(("recusado", $"resgate recusado ({Str(r, "refused") ?? "erro " + Int(r, "status")}); tento de novo em {RetryWait.TotalMinutes:0} min"));
         }
+        // Saldo que caiu sem resgate do app (descontado o baú): pontos gastos em outro lugar com a conta.
+        if (points is int now2 && c.Points is int before && !Is(r, "redeemed") && now2 + 100 < before + (Is(r, "claimed") ? 50 : 0))
+            notes.Add(("gasto fora", $"o saldo caiu {before - now2} sem resgate do app (gasto em outro lugar?)"));
         if (points is int final)
             c.Points = final;
         var error = Str(r, "error");

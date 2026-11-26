@@ -147,6 +147,16 @@ public class PointsTests
     }
 
     [Fact]
+    public void Notes_have_kinds_and_spent_elsewhere()
+    {
+        var p = new Points("Twitch");
+        Assert.Contains(p.Apply("c", """{"points":400,"claimed":true}"""), n => n.Kind == "baú");
+        Assert.Contains(p.Apply("c", """{"points":100}"""), n => n.Kind == "gasto fora");
+        Assert.Equal(new Log.RedeemEntry("26/11 10:00:00", 2, "Kick", "yoda", "resgate", "resgatou X"),
+            Log.Parse("26/11 10:00:00\t2\tKick\tyoda\tresgate\tresgatou X"));
+    }
+
+    [Fact]
     public void Refused_waits_before_retry()
     {
         var now = DateTime.Now;

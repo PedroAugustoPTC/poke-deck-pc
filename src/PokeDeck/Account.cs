@@ -390,9 +390,9 @@ internal sealed class Account : IDisposable
         {
         }
         var notes = _tp.Apply(ch, json);
-        foreach (var note in notes)
-            Log.Write(Index, note);
-        return notes.Any(x => x.Contains("resgatou"));
+        foreach (var (what, text) in notes)
+            Log.Redeem(Index, "Twitch", ch, what, text);
+        return notes.Any(x => x.Kind == "resgate");
     }
 
     private async Task<bool> KickRunAsync(string ch, string? kind, bool spend)
@@ -403,10 +403,12 @@ internal sealed class Account : IDisposable
         if (await _kickPage.EvalAsync(script) is not string json)
             return false;
         var notes = _kp.Apply(ch, json);
-        foreach (var note in notes)
-            Log.Write(Index, note);
-        return notes.Any(x => x.Contains("resgatou"));
+        foreach (var (what, text) in notes)
+            Log.Redeem(Index, "Kick", ch, what, text);
+        return notes.Any(x => x.Kind == "resgate");
     }
+
+    private static string SiteName(string site) => site == "twitch" ? "Twitch" : "Kick";
 
     private static Task Breather() => Task.Delay(Jitter.Between(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(6)));
 
@@ -470,12 +472,12 @@ internal sealed class Account : IDisposable
         {
             if (left > guard.LeftBefore + 60)
             {
-                Log.Write(Index, $"guarda {site}: o bônus {kind} subiu no jogo");
+                Log.Redeem(Index, SiteName(site), "—", "guarda", $"o bônus {kind} subiu no jogo");
                 guard.RedeemedAt = null;
             }
             else if (now - at > TimeSpan.FromMinutes(5))
             {
-                Log.Write(Index, $"guarda {site}: o bônus não subiu no jogo (site vinculado?); pausa de 1 h");
+                Log.Redeem(Index, SiteName(site), "—", "guarda", "o bônus não subiu no jogo (site vinculado?); pausa de 1 h");
                 guard.RedeemedAt = null;
                 guard.HoldUntil = now.AddHours(1);
             }
@@ -510,11 +512,11 @@ internal sealed class Account : IDisposable
             if (guard.Pick(candidates, live) is not string pick)
             {
                 if (!guard.NoneNoted)
-                    Log.Write(Index, $"guarda {site}: o bônus {kind} vence em {left / 60} min e nenhum canal tem os pontos");
+                    Log.Redeem(Index, SiteName(site), "—", "guarda", $"o bônus {kind} vence em {left / 60} min e nenhum canal tem os pontos");
                 guard.NoneNoted = true;
                 return;
             }
-            Log.Write(Index, $"guarda {site}: o bônus {kind} vence em {left / 60} min; resgatando em {pick}");
+            Log.Redeem(Index, SiteName(site), pick, "guarda", $"o bônus {kind} vence em {left / 60} min; resgatando aqui");
             bool ok = twitch ? await TwitchRunAsync(pick, kind, spend: true, claim: false) : await KickRunAsync(pick, kind, spend: true);
             guard.Reads.Remove(pick);
             if (ok)
