@@ -1,4 +1,4 @@
-# Compila no Docker e deixa o exe sempre em dist\PokeDeck.exe (dist\ fica fora do git).
+﻿# Compila no Docker e deixa o exe sempre em dist\PokeDeck.exe (dist\ fica fora do git).
 # Sem ErrorActionPreference=Stop: o docker escreve o progresso no stderr, que o PowerShell 5.1 trataria como erro.
 Set-Location $PSScriptRoot
 

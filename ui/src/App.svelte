@@ -118,6 +118,14 @@
     panel = null;
   }
 
+  // A dica dos botões T/K: as lives assistidas, se o aviso de assistindo passou (✓ hora) e o saldo/custo do bônus.
+  function livesTip(site, logged, lives, notes) {
+    if (!logged) return `${site}: sem login nesta conta.\nClique para entrar.`;
+    const rows = (lives ?? []).map((l) => `• ${l.channel} — ${l.watch === '…' ? 'conectando' : l.watch || 'conectando'}${l.points ? ` · pontos ${l.points}` : ''}`);
+    return [`${site}: ${rows.length ? `assistindo ${rows.length}` : 'nenhuma live aberta (ninguém da lista no ar)'}`, ...rows,
+      ...notes.filter(Boolean).map((n) => `⚠ ${n}`), '', `Clique para abrir a ${site} desta conta.`].join('\n');
+  }
+
   const fmt = (n) => (n == null ? '—' : Math.round(n).toLocaleString('pt-BR'));
   const left = (s) => (!s ? '—' : s >= 3600 ? `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}` : `${Math.max(1, Math.floor(s / 60))}min`);
   const PHASE = { game: ['no jogo', 'ok'], login: ['tela de login', 'warn'], loading: ['carregando…', 'muted'], failed: ['não carregou', 'bad'], elsewhere: ['aberta em outro lugar', 'bad'], off: ['desligada', 'muted'] };
@@ -181,9 +189,11 @@
             {#if a.bonus?.kick && c.RedeemKick}<span class="chip kk" title="Bônus da Kick que falta">K {left(a.bonus.kick[c.RedeemKick])}</span>{/if}
             <span class="spacer"></span>
             {#if c.Lives}
-              <span class="lives" title={[...(a.lives?.twitch ?? []).map((l) => `Twitch ${l.channel}: ${l.watch} ${l.points}`), ...(a.lives?.kick ?? []).map((l) => `Kick ${l.channel}: ${l.watch} ${l.points}`), a.lives?.twitchStopped, a.lives?.kickStopped, a.lives?.pubsub].filter(Boolean).join('\n') || 'nenhuma live aberta'}>
-                <button class="mini tw" class:dim={!a.lives?.twitchLogged} onclick={() => send({ t: 'login', i, site: 'twitch' })} title="Entrar na Twitch nesta conta">T {a.lives?.twitch?.length ?? 0}</button>
-                <button class="mini kk" class:dim={!a.lives?.kickLogged} onclick={() => send({ t: 'login', i, site: 'kick' })} title="Entrar na Kick nesta conta">K {a.lives?.kick?.length ?? 0}</button>
+              <span class="lives">
+                <button class="mini tw" class:dim={!a.lives?.twitchLogged} onclick={() => send({ t: 'login', i, site: 'twitch' })}
+                  title={livesTip('Twitch', a.lives?.twitchLogged, a.lives?.twitch, [a.lives?.twitchStopped, a.lives?.pubsub])}>T {a.lives?.twitch?.length ?? 0}</button>
+                <button class="mini kk" class:dim={!a.lives?.kickLogged} onclick={() => send({ t: 'login', i, site: 'kick' })}
+                  title={livesTip('Kick', a.lives?.kickLogged, a.lives?.kick, [a.lives?.kickStopped])}>K {a.lives?.kick?.length ?? 0}</button>
               </span>
             {/if}
             {#each (a.extensions ?? []).filter((e) => e.Enabled && e.Page) as e (e.Id)}
