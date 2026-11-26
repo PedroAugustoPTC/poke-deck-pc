@@ -131,7 +131,60 @@
     });
   }
 
-  setInterval(() => post(snapshot()), 1500);
+  // Limite de quadros (técnica do PokeIdleMulti): o requestAnimationFrame do jogo espera o próximo quadro permitido
+  // por um relógio. window.__pdFps (0 ou 60+: sem limite) e window.__pdSpriteMs são lidos a cada pedido: mudam na hora.
+  // O app põe a conta em uso fluida e as outras devagar; a caça não muda, só o desenho.
+  const raf = window.requestAnimationFrame.bind(window), caf = window.cancelAnimationFrame.bind(window);
+  const pending = new Map();
+  let nextId = 1, due = 0, last = -1;
+  const limit = () => { const fps = +window.__pdFps || 0; return fps > 0 && fps < 60 ? fps : 0; };
+  const frame = (id, cb) => raf((t) => {
+    if (!pending.delete(id)) return;
+    const fps = limit();
+    if (fps && t !== last) { last = t; due = performance.now() + 1000 / fps - 8; }
+    cb(t);
+  });
+  window.requestAnimationFrame = (cb) => {
+    const id = nextId++, entry = {};
+    pending.set(id, entry);
+    const wait = limit() ? due - performance.now() : 0;
+    if (wait > 1) entry.timer = setTimeout(() => { if (pending.has(id)) entry.frame = frame(id, cb); }, wait);
+    else entry.frame = frame(id, cb);
+    return id;
+  };
+  window.cancelAnimationFrame = (id) => {
+    const entry = pending.get(id);
+    if (!entry) return;
+    pending.delete(id);
+    clearTimeout(entry.timer);
+    if (entry.frame) caf(entry.frame);
+  };
+
+  // Os sprites animados do jogo usam um setInterval de exatos 220 ms: com __pdSpriteMs maior, pula trocas de quadro.
+  const nativeInterval = window.setInterval.bind(window);
+  window.setInterval = function (fn, ms, ...rest) {
+    if (ms !== 220 || typeof fn !== 'function') return nativeInterval(fn, ms, ...rest);
+    let lastTick = 0;
+    return nativeInterval(function () {
+      const want = Math.max(220, +window.__pdSpriteMs || 220);
+      if (want > 225) {
+        const now = performance.now();
+        if (now - lastTick < want - 5) return;
+        lastTick = now;
+      }
+      return fn.apply(this, arguments);
+    }, 220, ...rest);
+  };
+
+  // F11 dentro do jogo: tela cheia do app (a página do jogo não deve entrar em tela cheia sozinha).
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'F11') {
+      e.preventDefault();
+      post({ t: 'fullscreen' });
+    }
+  }, true);
+
+  nativeInterval(() => post(snapshot()), 1500);
 
   Object.defineProperty(window, '__pd', {
     value: Object.freeze({

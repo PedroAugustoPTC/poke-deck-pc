@@ -80,9 +80,11 @@ internal sealed class Account : IDisposable
             if (!e.IsRedirected)
                 SetPhase("loading");
         };
+        view.GotFocus += (_, _) => _host.SetActive(Index);
         core.NavigationCompleted += (_, e) =>
         {
             _loadedAt = DateTime.Now;
+            ApplyPerf();
             if (!e.IsSuccess && e.WebErrorStatus != CoreWebView2WebErrorStatus.OperationCanceled)
                 SetPhase("failed");
         };
@@ -117,6 +119,7 @@ internal sealed class Account : IDisposable
             Log.Write(Index, "conta desligada");
         }
         State = null;
+        Active = false;
         _prefsScriptId = null;
         Phase = "off";
     }
@@ -173,10 +176,34 @@ internal sealed class Account : IDisposable
             case "bought":
                 _restock.Bought(m.GetProperty("qtd").GetInt64(), m.GetProperty("gasto").GetInt64());
                 break;
+            case "fullscreen":
+                _host.ToggleFullscreen();
+                break;
             case "refused":
                 _restock.Refused(m.GetProperty("msg").GetString() ?? "");
                 break;
         }
+    }
+
+    public sealed record ExtInfo(string Id, string Name, bool Enabled, string? Page, bool Window);
+
+    /// <summary>As extensões do perfil desta conta (relido depois de instalar, ligar/desligar ou remover).</summary>
+    public List<ExtInfo> Extensions { get; set; } = new();
+
+    /// <summary>A conta em uso (a última clicada): desenha fluida; as outras ficam no limite de fundo.</summary>
+    public bool Active { get; private set; }
+
+    public void SetActive(bool active)
+    {
+        Active = active;
+        ApplyPerf();
+    }
+
+    private void ApplyPerf()
+    {
+        int fps = Active ? Timing.ActiveFps : Timing.BackgroundFps;
+        int sprite = Active ? 220 : Timing.BackgroundSpriteMs;
+        _ = Game?.CoreWebView2?.ExecuteScriptAsync($"window.__pdFps={fps};window.__pdSpriteMs={sprite}");
     }
 
     private void Send(string message) =>
@@ -193,6 +220,7 @@ internal sealed class Account : IDisposable
         core.IsMuted = Cfg.Muted;
         Game.ZoomFactor = Cfg.Zoom;
         _restock.Configure(Cfg.Restock, Timing);
+        ApplyPerf();
         bool changed = !firstTime && (Cfg.Ultra != _ultraOn || Cfg.Economy != _economyOn);
         if (changed)
         {
@@ -511,6 +539,8 @@ internal sealed class Account : IDisposable
         {
             i = Index,
             phase = Phase,
+            active = Active,
+            extensions = Extensions,
             nick = s?.Nick,
             gold = s?.Gold,
             vip = s?.Vip ?? false,

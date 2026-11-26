@@ -13,10 +13,33 @@
   let kickText = $state('');
   const bodies = [];
 
+  let fullscreen = $state(false);
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'F11') {
+      e.preventDefault();
+      send({ t: 'fullscreen' });
+    }
+  });
+  let extLink = $state('');
+  let extTargets = $state([true, true, true, true]);
+  let extBusy = $state(false);
+  let extMsg = $state(null);
+  function installExt() {
+    extBusy = true;
+    extMsg = null;
+    send({ t: 'extInstall', link: extLink, accounts: extTargets.map((on, i) => (on ? i : -1)).filter((i) => i >= 0) });
+  }
+
   host?.addEventListener('message', (e) => {
     const m = e.data;
     if (m?.t === 'config') config = m.config;
     else if (m?.t === 'status') status = m;
+    else if (m?.t === 'fullscreen') fullscreen = m.on;
+    else if (m?.t === 'extResult') {
+      extBusy = false;
+      extMsg = m;
+      if (m.ok) extLink = '';
+    }
   });
 
   const acc = (i) => status.accounts.find((a) => a.i === i) ?? {};
@@ -120,6 +143,7 @@
       {#each off as i}
         <button onclick={() => setAccount(i, { On: true })} title="Ligar">⏻ {config.Accounts[i].Name}</button>
       {/each}
+      <button class:on={fullscreen} onclick={() => send({ t: 'fullscreen' })} title="Tela cheia (F11)">⛶ Tela cheia</button>
       <button onclick={() => send({ t: 'checkLives' })} title="Conferir agora quem está ao vivo">⟳ Lives</button>
       <button class:on={panel === 'log'} onclick={() => (panel = panel === 'log' ? null : 'log')}>Registro</button>
       <button class:on={panel === 'config'} onclick={() => (panel === 'config' ? (panel = null) : openConfig())}>⚙ Config</button>
@@ -132,7 +156,7 @@
         {@const a = acc(i)}
         {@const c = config.Accounts[i]}
         {@const ph = PHASE[a.phase] ?? PHASE.loading}
-        <section class="pane">
+        <section class="pane" class:active={a.active}>
           <div class="head">
             <span class="dot {ph[1]}" title={ph[0]}></span>
             <strong>{c.Name}</strong>
@@ -152,6 +176,9 @@
                 <button class="mini kk" class:dim={!a.lives?.kickLogged} onclick={() => send({ t: 'login', i, site: 'kick' })} title="Entrar na Kick nesta conta">K {a.lives?.kick?.length ?? 0}</button>
               </span>
             {/if}
+            {#each (a.extensions ?? []).filter((e) => e.Enabled && e.Page) as e (e.Id)}
+              <button class="mini" onclick={() => send({ t: 'extPopup', i, id: e.Id })} title={e.Name}>🧩 {e.Name.slice(0, 12)}</button>
+            {/each}
             <button class="mini" onclick={() => setAccount(i, { Restock: { ...c.Restock, On: !c.Restock.On } })} class:on={c.Restock.On} title="Recompra">🛒</button>
             <button class="mini" onclick={() => send({ t: 'reload', i })} title="Recarregar">⟳</button>
             <button class="mini" onclick={() => (config.Layout === 'focus' ? setLayout('grid') : setLayout('focus', i))} title="Ampliar / voltar">⤢</button>
@@ -182,7 +209,8 @@
         <nav class="tabs">
           {#each draft.Accounts as a, i}<button class:on={tab === i} onclick={() => (tab = i)}>{a.Name}</button>{/each}
           <button class:on={tab === 'lives'} onclick={() => (tab = 'lives')}>Lives</button>
-          <button class:on={tab === 'timing'} onclick={() => (tab = 'timing')}>Tempos</button>
+          <button class:on={tab === 'timing'} onclick={() => (tab = 'timing')}>Tempos e desempenho</button>
+          <button class:on={tab === 'ext'} onclick={() => (tab = 'ext')}>Extensões</button>
           <span class="spacer"></span>
           <button onclick={() => (panel = null)}>Cancelar</button>
           <button class="on" onclick={saveConfig}>Salvar</button>
@@ -265,6 +293,27 @@
               Kick: {Object.entries(status.kickLive ?? {}).filter(([, v]) => v).map(([k]) => k).join(', ') || 'nenhum'}
             </p>
           </div>
+        {:else if tab === 'ext'}
+          <div class="form">
+            <p class="muted">Cada conta tem as próprias extensões. Cole o link da Chrome Web Store, marque as contas e instale. A conta recarrega para a extensão entrar.</p>
+            <label class="wide">Link <input class="grow" bind:value={extLink} placeholder="https://chromewebstore.google.com/detail/..." /></label>
+            <div class="row">
+              <label><input type="checkbox" checked={extTargets.every(Boolean)} onchange={(e) => (extTargets = extTargets.map(() => e.currentTarget.checked))} /> <strong>Todas</strong></label>
+              {#each draft.Accounts as acct, i}<label><input type="checkbox" bind:checked={extTargets[i]} /> {acct.Name}</label>{/each}
+              <button class="on" disabled={extBusy} onclick={installExt}>{extBusy ? 'Instalando…' : 'Instalar'}</button>
+            </div>
+            {#if extMsg}<p class:bad={!extMsg.ok}>{extMsg.msg}</p>{/if}
+            {#each draft.Accounts as acct, i}
+              <h3>{acct.Name}</h3>
+              {#each acc(i).extensions ?? [] as e (e.Id)}
+                <div class="row">
+                  <label><input type="checkbox" checked={e.Enabled} onchange={(ev) => send({ t: 'extToggle', i, id: e.Id, on: ev.currentTarget.checked })} /> {e.Name}</label>
+                  {#if e.Page}<button class="mini" onclick={() => send({ t: 'extPopup', i, id: e.Id })}>abrir</button>{/if}
+                  <button class="mini danger" onclick={() => confirm(`Remover ${e.Name} de ${acct.Name}?`) && send({ t: 'extRemove', i, id: e.Id })}>remover</button>
+                </div>
+              {:else}<span class="muted">nenhuma extensão</span>{/each}
+            {/each}
+          </div>
         {:else}
           <div class="form">
             <p class="muted">Todo intervalo varia ± a variação, para nada sair em ritmo exato.</p>
@@ -276,6 +325,11 @@
             <label>Guarda: agir quando faltar menos de (min) <input type="number" min="5" bind:value={draft.Timing.GuardThresholdMin} /></label>
             <label>Compras: intervalo entre pedidos (s) <input type="number" min="2" bind:value={draft.Timing.BuyGapMinSec} /> a <input type="number" min="2" bind:value={draft.Timing.BuyGapMaxSec} /></label>
             <label>Resgate recusado: tentar de novo em (min) <input type="number" min="5" bind:value={draft.Timing.RedeemRetryMin} /></label>
+            <h3>Desempenho</h3>
+            <p class="muted">A conta em uso (a última que você clicou, com borda amarela) desenha fluida; as outras desenham devagar. A caça não muda.</p>
+            <label>Quadros por segundo da conta em uso (60 = sem limite) <input type="number" min="10" max="60" bind:value={draft.Timing.ActiveFps} /></label>
+            <label>Quadros por segundo das outras contas <input type="number" min="1" max="60" bind:value={draft.Timing.BackgroundFps} /></label>
+            <label>Animação dos sprites das outras contas (ms; 220 = normal) <input type="number" min="220" max="3000" step="110" bind:value={draft.Timing.BackgroundSpriteMs} /></label>
           </div>
         {/if}
       </div>
@@ -296,6 +350,7 @@
   .deck.cols { grid-template-columns: repeat(var(--n), 1fr); }
   .deck.focus { grid-template-columns: 1fr; }
   .pane { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .pane.active { border-color: var(--accent); }
   .head { display: flex; align-items: center; gap: 6px; padding: 4px 6px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
   .body { flex: 1; position: relative; min-height: 0; background: var(--bg); }
   .cover { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
@@ -323,5 +378,9 @@
   .rules td, .rules th { padding: 3px 8px 3px 0; text-align: left; font-weight: normal; color: var(--muted); }
   .rules td { color: var(--text); }
   .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .wide { width: 100%; }
+  .grow { flex: 1; }
+  .bad { color: var(--bad); }
   .log { font: 12px/1.45 Consolas, monospace; white-space: pre-wrap; margin: 0; }
 </style>

@@ -132,8 +132,16 @@ public sealed class Timing
     public int BuyGapMaxSec { get; set; } = 8;
     public int RedeemRetryMin { get; set; } = 30;
 
+    /// <summary>Quadros por segundo da conta em uso (60 = sem limite) e das outras; ritmo dos sprites das outras (220 = o do jogo).</summary>
+    public int ActiveFps { get; set; } = 60;
+    public int BackgroundFps { get; set; } = 8;
+    public int BackgroundSpriteMs { get; set; } = 660;
+
     public void Fix()
     {
+        ActiveFps = Math.Clamp(ActiveFps, 10, 60);
+        BackgroundFps = Math.Clamp(BackgroundFps, 1, 60);
+        BackgroundSpriteMs = Math.Clamp(BackgroundSpriteMs, 220, 3000);
         JitterPct = Math.Clamp(JitterPct, 0, 0.5);
         LiveCheckSec = Math.Max(60, LiveCheckSec);
         TwitchPointsSec = Math.Max(60, TwitchPointsSec);

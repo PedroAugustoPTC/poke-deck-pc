@@ -209,6 +209,15 @@ public class ParseTests
     }
 
     [Fact]
+    public void Extension_id_from_store_link()
+    {
+        Assert.Equal("olccbpdjdkbfgondiiaicmlifhbcggmk",
+            Crx.IdFromLink("https://chromewebstore.google.com/detail/rotom-sniper-assistente-p/olccbpdjdkbfgondiiaicmlifhbcggmk?hl=pt-BR"));
+        Assert.Null(Crx.IdFromLink("https://example.com"));
+        Assert.Matches("^[a-p]{32}$", Crx.IdFromKey(new byte[] { 1, 2, 3 }));
+    }
+
+    [Fact]
     public void Config_fix_clamps()
     {
         var c = new Config { Accounts = new AccountConfig[1], TwitchChannels = new() { " Rodil ", "rodil", "" } }.Fix();
