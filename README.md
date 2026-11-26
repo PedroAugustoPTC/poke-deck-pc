@@ -1,8 +1,23 @@
-# PokeDeck (pessoal)
+# PokeDeck
 
 Até 4 contas do [pokeidle.io](https://pokeidle.io/app) numa janela, com recompra, ULTRA/Economia, lives leves da
-Twitch/Kick, baú da Twitch, resgate automático do bônus e guarda do bônus. Protocolos espelhados do
+Twitch/Kick, baú da Twitch, resgate automático do bônus, guarda do bônus e extensões por conta. Protocolos espelhados do
 [PokeIdleMulti](https://github.com/artbruno35/PokeIdleMulti); tempos e regras nossos, todos com variação aleatória.
+
+> Projeto de fã, não oficial, sem ligação com o pokeidle.io. Use por sua conta e respeite as regras do jogo.
+
+## Instalar
+
+1. Abra a [**última release**](https://github.com/PedroAugustoPTC/poke-deck-pc/releases/latest) e baixe o
+   `PokeDeck.exe` (em *Assets*).
+2. Ponha numa pasta qualquer e abra. Não precisa instalar nada: o exe já leva tudo. Precisa do WebView2 Runtime, que
+   já vem no Windows 10/11 (se faltar, o app avisa).
+3. O exe não é assinado: se aparecer "O Windows protegeu o computador", clique em **Mais informações → Executar assim
+   mesmo**. Alguns antivírus também estranham exe novo sem assinatura.
+4. Na barra de cima, **⏻ Ligar todas** (ou ligue uma conta) e entre no jogo em cada uma.
+
+**Atualizar:** feche o app, baixe o exe da release nova e troque pelo antigo. Logins e configurações ficam em
+`%LOCALAPPDATA%\PokeDeck` (não no exe) e continuam. **Não compartilhe essa pasta:** tem os seus logins.
 
 ## Compilar (só Docker, nada instalado no PC)
 
@@ -13,11 +28,11 @@ Twitch/Kick, baú da Twitch, resgate automático do bônus e guarda do bônus. P
 Sai sempre em `dist\PokeDeck.exe` (pasta fora do git; feche o app antes de compilar). Um arquivo, sem instalar .NET. Precisa do WebView2 Runtime (já vem no Windows 10/11).
 O build roda os testes do núcleo antes de gerar o exe.
 
-## Releases
+## Publicar uma versão
 
-Publicar uma release no GitHub (Releases → *Draft a new release*, tag `v0.2.0`, *Publish*) dispara
-`.github/workflows/release.yml`: compila com o mesmo Dockerfile e anexa o `PokeDeck.exe` à release para download.
-A versão da tag aparece no título da janela. Para atualizar: feche o app e troque o exe; logins e config ficam.
+Releases → *Draft a new release* → tag nova (`v0.2.0`) → *Publish* (ou `gh release create v0.2.0 --target main`).
+Isso dispara `.github/workflows/release.yml`, que compila com o mesmo Dockerfile e anexa o `PokeDeck.exe` à release
+(uns 5 min). A versão da tag aparece no título da janela. Histórico: `v0.1.0` (26/11/2026), primeira versão.
 
 ## Usar
 
