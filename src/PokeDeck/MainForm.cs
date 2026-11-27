@@ -28,9 +28,18 @@ internal sealed class MainForm : Form
     private bool _updating;
     private int _updatePct;
     private string? _updateError;
+    private readonly NotifyIcon _tray = new() { Icon = Program.AppIcon, Text = "PokeDeck", ContextMenuStrip = new ContextMenuStrip() };
+    private bool _quitting, _trayTipShown;
 
     public MainForm()
     {
+        _tray.ContextMenuStrip!.Items.Add("Abrir o PokeDeck", null, (_, _) => ShowFromTray());
+        _tray.ContextMenuStrip.Items.Add("Fechar o PokeDeck", null, (_, _) => Quit());
+        _tray.MouseClick += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left)
+                ShowFromTray();
+        };
         Icon = Program.AppIcon;
         Text = $"PokeDeck {typeof(MainForm).Assembly.GetName().Version?.ToString(3)}";
         BackColor = System.Drawing.Color.FromArgb(18, 20, 26);
@@ -61,7 +70,7 @@ internal sealed class MainForm : Form
         {
             Log.Write(null, "falha ao abrir: " + ex);
             MessageBox.Show(this, ex.Message, "PokeDeck", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            Close();
+            Quit();
         }
     }
 
@@ -169,7 +178,7 @@ internal sealed class MainForm : Form
             }
             Log.Write(null, $"atualizado para {r.Tag}; abrindo a versão nova");
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, "--updated") { UseShellExecute = false });
-            Close();
+            Quit();
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException
                                        or TaskCanceledException or System.ComponentModel.Win32Exception)
@@ -680,8 +689,37 @@ internal sealed class MainForm : Form
         view.CoreWebView2.Navigate(site == "kick" ? "https://kick.com/" : "https://www.twitch.tv/login");
     }
 
+    private void ShowFromTray()
+    {
+        _tray.Visible = false;
+        Show();
+        if (WindowState == FormWindowState.Minimized)
+            WindowState = FormWindowState.Normal;
+        Activate();
+    }
+
+    /// <summary>Fecha de vez (menu da bandeja, atualização, erro ao abrir), mesmo com o X indo para a bandeja.</summary>
+    private void Quit()
+    {
+        _quitting = true;
+        Close();
+    }
+
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        if (!_quitting && e.CloseReason == CloseReason.UserClosing && Config.CloseToTray)
+        {
+            e.Cancel = true; // as contas seguem rodando escondidas, como as que estão sem vaga na tela
+            Hide();
+            _tray.Visible = true;
+            if (!_trayTipShown)
+            {
+                _trayTipShown = true;
+                _tray.ShowBalloonTip(5000, "O PokeDeck continua rodando", "Clique no ícone para abrir. Para fechar de vez: botão direito → Fechar o PokeDeck.", ToolTipIcon.Info);
+            }
+            return;
+        }
+        _tray.Dispose();
         _stop.Cancel();
         foreach (var a in _accounts)
             a.Dispose();

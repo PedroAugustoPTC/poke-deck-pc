@@ -31,7 +31,7 @@ internal static class Program
         }
         if (!first)
         {
-            MessageBox.Show("O PokeDeck já está aberto.", "PokeDeck", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("O PokeDeck já está aberto.\nSe a janela sumiu, ele está na bandeja (perto do relógio): clique no ícone para abrir.", "PokeDeck", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         _ = DeleteOldExeAsync();

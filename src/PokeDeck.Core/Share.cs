@@ -10,7 +10,7 @@ public sealed class ShareException(string message) : Exception(message);
 /// <summary>
 /// Leva a config entre o PokeDeck do PC e o do celular (espelho do Share.kt do mobile), por código de texto ou arquivo
 /// .json. Vai só o que é preferência: canais e lives, baú, horário de bloqueio e, por conta (pela posição), nome, ligada,
-/// ultra, economia, lives, resgates, guarda e recompra. O que é do aparelho (layout, zoom, mudo, movimento, tempos, tour)
+/// ultra, economia, lives, resgates, guarda e recompra. O que é do aparelho (layout, zoom, mudo, movimento, tempos, tour, bandeja)
 /// fica. Formato: JSON camelCase com "v"; o código é "PKD1:" + base64url(gzip(json)). Também abre o config.json dos dois.
 /// </summary>
 public static class Share
@@ -23,7 +23,7 @@ public static class Share
     private static readonly JsonSerializerOptions Camel = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     private static readonly JsonSerializerOptions Pretty = new() { WriteIndented = true };
     private static readonly JsonSerializerOptions AnyCase = new() { PropertyNameCaseInsensitive = true };
-    private static readonly string[] DeviceKeys = { "layout", "focus", "timing", "tourDone" };
+    private static readonly string[] DeviceKeys = { "layout", "focus", "timing", "tourDone", "closeToTray" };
     private static readonly string[] AccountDeviceKeys = { "reduceMotion", "muted", "zoom" };
 
     public static JsonObject Json(Config c)

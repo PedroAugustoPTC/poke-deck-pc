@@ -39,6 +39,9 @@ public sealed class Config
     /// </summary>
     public bool TourDone { get; set; } = true;
 
+    /// <summary>O X da janela manda o PokeDeck para a bandeja (perto do relógio), rodando; sair é pelo menu do ícone.</summary>
+    public bool CloseToTray { get; set; } = true;
+
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
     public static Config Load(string path)

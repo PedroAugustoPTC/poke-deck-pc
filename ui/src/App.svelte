@@ -683,6 +683,9 @@
               </select>
             </label>
             <p class="muted">Sprites são os desenhos dos Pokémon e do treinador. Eles "se mexem" trocando de desenho a cada 220 ms (≈4,5 vezes por segundo). Deixar a animação mais lenta faz essa troca acontecer menos vezes: o Pokémon parece mais parado, mas o PC trabalha menos. Não afeta os ataques nem a caça.</p>
+            <h3>Janela</h3>
+            <label><input type="checkbox" bind:checked={draft.CloseToTray} /> O X manda para a bandeja (perto do relógio) em vez de fechar</label>
+            <p class="muted">As contas seguem rodando. Clique no ícone da bandeja para abrir; para fechar de vez, botão direito nele → Fechar o PokeDeck.</p>
           </div>
         {/if}
       </div>

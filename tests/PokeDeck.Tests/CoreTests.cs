@@ -463,7 +463,7 @@ public class ShareTests
     {
         var o = Share.Json(new Config());
         Assert.Equal(1, (int)o["v"]!);
-        Assert.False(o.ContainsKey("layout") || o.ContainsKey("timing") || o.ContainsKey("tourDone"));
+        Assert.False(o.ContainsKey("layout") || o.ContainsKey("timing") || o.ContainsKey("tourDone") || o.ContainsKey("closeToTray"));
         var a = o["accounts"]![0]!.AsObject();
         Assert.False(a.ContainsKey("zoom") || a.ContainsKey("muted") || a.ContainsKey("reduceMotion"));
         Assert.True(a.ContainsKey("restock"));
