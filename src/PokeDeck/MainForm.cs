@@ -249,11 +249,15 @@ internal sealed class MainForm : Form
         var old = Config;
         Config = next.Fix();
         Config.Save(ConfigPath);
+        bool started = false;
         foreach (var a in _accounts)
         {
             bool on = Config.Accounts[a.Index].On;
             if (on && a.Game is null && _env is not null)
+            {
                 await a.StartAsync(_env);
+                started = true;
+            }
             else if (!on && a.Game is not null)
                 a.Stop();
             else
@@ -265,7 +269,8 @@ internal sealed class MainForm : Form
         else if (running.Count > 0 && !running.Any(a => a.Active))
             SetActive(running[0].Index);
         Post(new { t = "config", config = Config });
-        bool livesChanged = !old.TwitchChannels.SequenceEqual(Config.TwitchChannels) || !old.KickChannels.SequenceEqual(Config.KickChannels)
+        // conta recém-ligada abre as lives já, sem esperar a próxima conferência (~2 min)
+        bool livesChanged = started || !old.TwitchChannels.SequenceEqual(Config.TwitchChannels) || !old.KickChannels.SequenceEqual(Config.KickChannels)
                             || old.TwitchLives != Config.TwitchLives || old.KickLives != Config.KickLives
                             || old.Accounts.Select(a => a.Lives).SequenceEqual(Config.Accounts.Select(a => a.Lives)) == false;
         if (livesChanged)
