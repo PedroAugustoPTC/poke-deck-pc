@@ -385,3 +385,87 @@ public class TimingTests
         Assert.Equal(660, t.SpriteMs);
     }
 }
+
+public class ShareTests
+{
+    [Fact]
+    public void CodeRoundTripKeepsDeviceFields()
+    {
+        var src = new Config { TwitchChannels = new() { "b", "a" }, KickLives = 4, Layout = "cols" };
+        src.Accounts[1].Name = "Alt";
+        src.Accounts[1].Restock.GoldFloor = 777;
+        src.Accounts[1].Restock.Potions.Buy = 42;
+        src.Accounts[0].Zoom = 2;
+        var code = Share.Code(src);
+        Assert.StartsWith("PKD1:", code);
+
+        var here = new Config { Layout = "focus", Focus = 3, TourDone = false };
+        here.Timing.Fps = 60;
+        here.Accounts[0].Zoom = 0.8;
+        here.Accounts[0].Muted = true;
+        var got = Share.Read("  " + code + "\n", here);
+        Assert.Equal(new[] { "b", "a" }, got.TwitchChannels);
+        Assert.Equal(4, got.KickLives);
+        Assert.Equal("Alt", got.Accounts[1].Name);
+        Assert.Equal(777, got.Accounts[1].Restock.GoldFloor);
+        Assert.Equal(42, got.Accounts[1].Restock.Potions.Buy);
+        Assert.Equal(0.8, got.Accounts[0].Zoom); // zoom, mudo, layout, tempos e tour são do aparelho
+        Assert.True(got.Accounts[0].Muted);
+        Assert.Equal("focus", got.Layout);
+        Assert.Equal(60, got.Timing.Fps);
+        Assert.False(got.TourDone);
+    }
+
+    [Fact]
+    public void ReadsMobileConfigJson()
+    {
+        // o config.json do celular: camelCase, com muted/tourDone/setupDone, só 2 contas aqui
+        const string mobile = """
+            {"accounts":[{"name":"Cel 1","on":true,"ultra":false,"economy":true,"muted":false,"lives":true,"redeemTwitch":"xp",
+              "redeemKick":"captura","redeemTwitchOn":true,"redeemKickOn":false,"guard":true,
+              "restock":{"on":true,"goldFloor":123,"potionFirst":false,"balls":{"on":true,"id":2,"buy":5,"below":4},
+              "revives":{"on":true,"id":0,"buy":3,"below":1},"potions":{"on":false,"id":7,"buy":10,"below":2}}},
+              {"name":"Cel 2","on":false}],
+             "twitchChannels":["X","y"],"kickChannels":[],"twitchLives":1,"kickLives":2,"claimChest":true,
+             "redeemBlockAt":null,"tourDone":true,"setupDone":true}
+            """;
+        var here = new Config();
+        here.Accounts[2].Name = "Fica";
+        var got = Share.Read(mobile, here);
+        Assert.Equal(new[] { "x", "y" }, got.TwitchChannels);
+        Assert.Empty(got.KickChannels);
+        Assert.Equal(1, got.TwitchLives);
+        var a = got.Accounts[0];
+        Assert.Equal("Cel 1", a.Name);
+        Assert.True(a.Economy && a.Lives && !a.RedeemKickOn);
+        Assert.Equal("captura", a.RedeemKick);
+        Assert.Equal(123, a.Restock.GoldFloor);
+        Assert.Equal(7, a.Restock.Potions.Id);
+        Assert.False(a.Restock.Potions.On);
+        Assert.False(got.Accounts[1].On);
+        Assert.Equal("Fica", got.Accounts[2].Name);
+        Assert.Equal(4, got.Accounts.Length);
+    }
+
+    [Theory]
+    [InlineData("oi")]
+    [InlineData("PKD1:@@@")]
+    [InlineData("PKD1:AAAA")]
+    [InlineData("{\"x\":1}")]
+    [InlineData("{nope")]
+    [InlineData("{\"v\":2,\"accounts\":[]}")]
+    [InlineData("{\"twitchLives\":\"dois\"}")]
+    public void RejectsBadInput(string bad) =>
+        Assert.False(string.IsNullOrEmpty(Assert.Throws<ShareException>(() => Share.Read(bad, new Config())).Message));
+
+    [Fact]
+    public void FileHasNoDeviceFields()
+    {
+        var o = Share.Json(new Config());
+        Assert.Equal(1, (int)o["v"]!);
+        Assert.False(o.ContainsKey("layout") || o.ContainsKey("timing") || o.ContainsKey("tourDone"));
+        var a = o["accounts"]![0]!.AsObject();
+        Assert.False(a.ContainsKey("zoom") || a.ContainsKey("muted") || a.ContainsKey("reduceMotion"));
+        Assert.True(a.ContainsKey("restock"));
+    }
+}

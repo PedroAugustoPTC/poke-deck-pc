@@ -7,7 +7,7 @@
   é o usuário (ou `explorer.exe "<caminho do exe>"`).
 - **Releases:** publicar uma release com tag `vX.Y.Z` roda `.github/workflows/release.yml`, que compila com o
   Dockerfile e anexa o `PokeDeck.exe`. Primeira foi a `v0.1.0` (26/11/2026); a atual é a
-  `v1.3.1` (27/11/2026). Desde a `v0.3.0` o app se atualiza sozinho pelas releases. O repo é público e amigos usam as releases:
+  `v1.4.0` (27/11/2026). Desde a `v0.3.0` o app se atualiza sozinho pelas releases. O repo é público e amigos usam as releases:
   manter compatibilidade do `config.json` entre versões.
 - **Protocolos:** espelhados do [PokeIdleMulti](https://github.com/artbruno35/PokeIdleMulti). Antes de mexer em
   jogo/Twitch/Kick, conferir como ele faz.

@@ -51,6 +51,12 @@
       extBusy = false;
       extMsg = m;
       if (m.ok) extLink = '';
+    } else if (m?.t === 'shareDone' || m?.t === 'shareError') shareMsg = { ok: m.t === 'shareDone', text: m.text };
+    else if (m?.t === 'shareImported' && draft) {
+      draft = m.config;
+      twitchText = draft.TwitchChannels.join('\n');
+      kickText = draft.KickChannels.join('\n');
+      shareMsg = { ok: true, text: 'Config importada. Confira as abas e clique em Salvar para valer (Cancelar descarta).' };
     }
   });
 
@@ -119,11 +125,24 @@
     copied = from;
   }
 
-  function saveConfig() {
+  // Os canais ficam no texto até salvar; exportar e salvar passam por aqui antes.
+  function syncDraft() {
     const lines = (t) => t.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
     draft.TwitchChannels = lines(twitchText);
     draft.KickChannels = lines(kickText);
     draft.RedeemBlockAt = hhmm(draft.RedeemBlockAt);
+  }
+
+  // Importar/exportar (Share.cs): o app copia/cola e abre os diálogos; o que chega volta para o rascunho.
+  let shareMsg = $state(null);
+  function share(t) {
+    syncDraft();
+    shareMsg = null;
+    send({ t, config: $state.snapshot(draft) });
+  }
+
+  function saveConfig() {
+    syncDraft();
     draft.Accounts.forEach((a, i) => {
       a.RedeemTwitch ||= null;
       a.RedeemKick ||= null;
@@ -147,7 +166,7 @@
     { at: 'checklives', title: 'Lives', text: 'Confere agora quem está ao vivo. O app também confere sozinho de tempos em tempos.' },
     { at: 'log', title: 'Registro', text: 'Tudo o que aconteceu: resgates, baús, recusas, a guarda e o log geral do app.' },
     { at: 'config', title: 'Config', text: 'Aqui fica tudo o que dá para ajustar. Vamos dar uma olhada por dentro.' },
-    { cfg: 0, at: 'cfg-tabs', title: 'Abas da Config', text: 'Uma aba para cada conta, mais Lives, Tempos e desempenho e Extensões. Nada vale até clicar em Salvar; Cancelar descarta.' },
+    { cfg: 0, at: 'cfg-tabs', title: 'Abas da Config', text: 'Uma aba para cada conta, mais Lives, Tempos e desempenho, Extensões e Importar/exportar (levar a config para o celular). Nada vale até clicar em Salvar; Cancelar descarta.' },
     { cfg: 0, at: 'cfg-account', title: 'A conta', text: 'Nome, ligada/desligada, os modos do jogo, menos animações, mudo e o zoom só desta conta.' },
     { cfg: 0, at: 'cfg-restock', title: 'Recompra', text: 'Quando a pokebola, as poções ou os revives ficarem abaixo do número, a conta compra a quantidade escolhida, sem gastar abaixo do ouro mínimo. "Aplicar a todas" copia estas regras para as outras contas.' },
     { cfg: 'lives', at: 'cfg-channels', title: 'Canais das lives', text: 'Um canal por linha, em ordem de prioridade: o app abre os primeiros que estiverem no ar, até o número de lives por conta. Na Twitch também dá para pegar o baú de bônus sozinho.' },
@@ -475,6 +494,7 @@
           <button class="tab" class:on={tab === 'lives'} onclick={() => (tab = 'lives')}>Lives</button>
           <button class="tab" class:on={tab === 'timing'} onclick={() => (tab = 'timing')}>Tempos e desempenho</button>
           <button class="tab" class:on={tab === 'ext'} onclick={() => (tab = 'ext')}>Extensões</button>
+          <button class="tab" class:on={tab === 'share'} onclick={() => ((tab = 'share'), (shareMsg = null))}>Importar/exportar</button>
           <span class="spacer"></span>
           <button data-tour="cfg-retour" onclick={startTour} title="Mostra de novo o tour pelo app (fecha a Config sem salvar)">Rever tour</button>
           <button onclick={() => (panel = null)}>Cancelar</button>
@@ -600,6 +620,23 @@
             </div>
           </div>
           <p class="muted small">As lives abertas são reconferidas ao salvar.</p>
+        {:else if tab === 'share'}
+          <div class="form">
+            <p class="muted">Leva a config entre este PC e o PokeDeck do celular (ou outro PC): canais e ordem das lives, quantas lives, baú, horário de bloqueio e, por conta, nome, ligada, ULTRA, economia, lives, resgates, guarda e recompra. Layout, zoom, mudo, animações e tempos ficam como estão aqui.</p>
+            <h3>Código</h3>
+            <p class="muted">Um texto que começa com PKD1:. Mande para você mesmo (WhatsApp, Telegram, e-mail) e cole no outro aparelho.</p>
+            <div class="row">
+              <button onclick={() => share('shareCopy')}>Copiar código</button>
+              <button onclick={() => share('sharePaste')}>Colar código</button>
+            </div>
+            <h3>Arquivo</h3>
+            <div class="row">
+              <button onclick={() => share('shareSave')}>Exportar arquivo…</button>
+              <button onclick={() => share('shareOpen')}>Importar arquivo…</button>
+            </div>
+            <p class="muted small">Importar só muda o que está nesta janela: nada vale até clicar em Salvar. No celular a Kick vai até 2 lives.</p>
+            {#if shareMsg}<p class:bad={!shareMsg.ok}>{shareMsg.text}</p>{/if}
+          </div>
         {:else if tab === 'ext'}
           <div class="form" data-tour="cfg-ext">
             <p class="muted">Cada conta tem as próprias extensões. Cole o link da Chrome Web Store, marque as contas e instale. A conta recarrega para a extensão entrar.</p>

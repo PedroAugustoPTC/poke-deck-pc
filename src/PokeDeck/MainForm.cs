@@ -287,6 +287,12 @@ internal sealed class MainForm : Form
                 case "config":
                     await SetConfigAsync(m.GetProperty("config").Deserialize<Config>()!);
                     break;
+                case "shareCopy":
+                case "shareSave":
+                case "sharePaste":
+                case "shareOpen":
+                    ShareConfig(m.GetProperty("t").GetString()!, m.GetProperty("config").Deserialize<Config>()!.Fix());
+                    break;
                 case "reload":
                     _accounts[m.GetProperty("i").GetInt32()].Reload();
                     break;
@@ -357,6 +363,54 @@ internal sealed class MainForm : Form
     {
         Config.Save(ConfigPath);
         Post(new { t = "config", config = Config });
+    }
+
+    /// <summary>
+    /// Copiar/colar o código ou salvar/abrir o arquivo da config (<see cref="Share"/>) a partir do rascunho da Config. O que
+    /// vem volta para o rascunho: nada vale até o Salvar.
+    /// </summary>
+    private void ShareConfig(string what, Config draft)
+    {
+        try
+        {
+            switch (what)
+            {
+                case "shareCopy":
+                    Clipboard.SetText(Share.Code(draft));
+                    Post(new { t = "shareDone", text = "Código copiado. Cole no PokeDeck do celular (Config → Importar/exportar)." });
+                    break;
+                case "shareSave":
+                {
+                    using var dlg = new SaveFileDialog { FileName = "pokedeck-config.json", Filter = "Config do PokeDeck (*.json)|*.json", Title = "Exportar config" };
+                    if (dlg.ShowDialog(this) != DialogResult.OK)
+                        return;
+                    File.WriteAllText(dlg.FileName, Share.FileText(draft));
+                    Post(new { t = "shareDone", text = "Config salva em " + dlg.FileName });
+                    break;
+                }
+                case "sharePaste":
+                    Post(new { t = "shareImported", config = Share.Read(Clipboard.ContainsText() ? Clipboard.GetText() : "", draft) });
+                    break;
+                case "shareOpen":
+                {
+                    using var dlg = new OpenFileDialog { Filter = "Config do PokeDeck (*.json)|*.json|Todos os arquivos|*.*", Title = "Importar config" };
+                    if (dlg.ShowDialog(this) != DialogResult.OK)
+                        return;
+                    if (new FileInfo(dlg.FileName).Length > 1024 * 1024)
+                        throw new ShareException("Arquivo grande demais para ser uma config do PokeDeck.");
+                    Post(new { t = "shareImported", config = Share.Read(File.ReadAllText(dlg.FileName), draft) });
+                    break;
+                }
+            }
+        }
+        catch (ShareException ex)
+        {
+            Post(new { t = "shareError", text = ex.Message });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.ExternalException)
+        {
+            Post(new { t = "shareError", text = "Não deu: " + ex.Message });
+        }
     }
 
     private async Task SetConfigAsync(Config next)
