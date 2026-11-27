@@ -1,16 +1,33 @@
+/* Madeira & Noite: as cores saem das variáveis do próprio pokeidle.io (madeira das placas, noite do fundo, ouro). */
 :root {
-  --bg: #12141a;
-  --panel: #1b1e27;
-  --panel-2: #232735;
-  --line: #2d3242;
-  --text: #e6e8ef;
-  --muted: #8a90a3;
-  --accent: #f2c94c;
-  --ok: #4cc38a;
-  --warn: #f2994a;
-  --bad: #eb5757;
-  --twitch: #a970ff;
+  --bg: #140a0f;
+  --panel: #1e1219;
+  --panel-2: #2a141d;
+  --well: #33202b;
+  --line: #5c3948;
+  --text: #fff6ef;
+  --muted: #c9a9b4;
+  --wood-light: #f1d3b7;
+  --honey: #e7a86d;
+  --wood: #bd6951;
+  --bark: #914850;
+  --heart: #722c3f;
+  --grain: #480e1e;
+  --gold-light: #ffe9a3;
+  --accent: #e2a93f;
+  --gold-rim: #b98a2e;
+  --bronze: #7d5313;
+  --gold-bg: #3d2c10;
+  --ink: #3a0a16;
+  --ok: #6fd08a;
+  --warn: #f0a03c;
+  --bad: #d8574a;
+  --bad-text: #ffc9bd;
+  --twitch: #bf94ff;
   --kick: #53fc18;
+  --ui: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  --tight: 'Barlow Semi Condensed', 'Barlow', 'Segoe UI', sans-serif;
+  --pixel: 'Pixelify Sans', 'Barlow', sans-serif;
   color-scheme: dark;
 }
 
@@ -21,7 +38,7 @@ html, body, #app { margin: 0; height: 100%; }
 body {
   background: var(--bg);
   color: var(--text);
-  font: 13px/1.35 'Segoe UI', system-ui, sans-serif;
+  font: 14px/1.35 var(--ui);
   overflow: hidden;
   user-select: none;
 }
@@ -29,33 +46,47 @@ body {
 button {
   font: inherit;
   color: var(--text);
-  background: var(--panel-2);
+  background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 3px 9px;
+  border-radius: 4px;
+  padding: 3px 10px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 button:hover { border-color: var(--muted); }
-button.on { background: #3a3220; border-color: var(--accent); color: var(--accent); }
-button.danger { border-color: var(--bad); color: var(--bad); }
+button:disabled { cursor: default; opacity: 0.55; }
+button.on {
+  background: var(--accent);
+  border-color: var(--bronze);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 var(--gold-light), inset 0 -2px 0 var(--gold-rim);
+}
+button.danger { border-color: var(--bad); color: var(--bad-text); background: rgba(216, 87, 74, 0.12); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--gold-light); outline-offset: 1px; }
+button svg { flex: none; }
 
 input, select {
   font: inherit;
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 3px 6px;
+  border-radius: 4px;
+  padding: 4px 8px;
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.35);
 }
-input[type='number'] { width: 90px; }
-input[type='checkbox'] { accent-color: var(--accent); }
+input[type='number'] { width: 90px; font-variant-numeric: tabular-nums; }
+input[type='checkbox'] { accent-color: var(--accent); box-shadow: none; width: 15px; height: 15px; margin: 0; }
 textarea {
-  font: 12px/1.4 Consolas, monospace;
+  font: 13px/1.5 'Cascadia Mono', Consolas, monospace;
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 4px;
   width: 100%;
-  padding: 6px;
+  padding: 8px 10px;
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.35);
 }
-label { display: inline-flex; gap: 6px; align-items: center; }
+label { display: inline-flex; gap: 8px; align-items: center; }

@@ -193,49 +193,83 @@
   const fmt = (n) => (n == null ? '—' : Math.round(n).toLocaleString('pt-BR'));
   const left = (s) => (!s ? '—' : s >= 3600 ? `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}` : `${Math.max(1, Math.floor(s / 60))}min`);
   const PHASE = { game: ['no jogo', 'ok'], login: ['tela de login', 'warn'], loading: ['carregando…', 'muted'], failed: ['não carregou', 'bad'], elsewhere: ['aberta em outro lugar', 'bad'], off: ['desligada', 'muted'] };
+  // Ícones de traço (grade 16×16, cor do texto) no lugar dos emoji.
+  const ICONS = {
+    grid: '<rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="5" height="5"/><rect x="9" y="9" width="5" height="5"/>',
+    cols: '<rect x="2" y="2" width="3" height="12"/><rect x="6.5" y="2" width="3" height="12"/><rect x="11" y="2" width="3" height="12"/>',
+    bolt: '<path d="M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z"/>',
+    battery: '<rect x="1.5" y="5" width="11.5" height="6" rx="1"/><path d="M14.5 7v2M4.5 7.5v1M7 7.5v1"/>',
+    mute: '<path d="M2.5 6h2.5L8.5 3v10L5 10H2.5z"/><path d="m11 6 4 4M15 6l-4 4"/>',
+    swap: '<path d="M2 5h11l-2.5-2.5"/><path d="M14 11H3l2.5 2.5"/>',
+    power: '<path d="M8 1.8v5.4"/><path d="M4.6 4.2a5 5 0 1 0 6.8 0"/>',
+    full: '<path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/>',
+    refresh: '<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.5 2v3h-3"/>',
+    list: '<path d="M5.5 4h8.5M5.5 8h8.5M5.5 12h8.5M2 4h.5M2 8h.5M2 12h.5"/>',
+    gear: '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>',
+    gift: '<rect x="2" y="6" width="12" height="3"/><path d="M3 9v5h10V9M8 6v8"/><path d="M8 6C6.4 6 4.6 5.4 5.1 3.8S7.6 4.1 8 6c.4-1.9 2.4-3.8 2.9-2.2S9.6 6 8 6z"/>',
+    cart: '<path d="M1.5 2.5h2l1.5 8h7.5l1.5-6H4.2"/><circle cx="6" cy="13.2" r="1"/><circle cx="11.5" cy="13.2" r="1"/>',
+    expand: '<path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9"/>',
+    puzzle: '<path d="M3 5h3a1.5 1.5 0 1 1 3 0h3v3a1.5 1.5 0 1 1 0 3v3H3z"/>',
+    vote: '<path d="M2.5 9h11v5h-11z"/><path d="M5 9V2.5h6V9M6.5 5.5l1 1 2-2"/>',
+    check: '<path d="m3 8.5 3 3 7-7"/>',
+    up: '<path d="M8 13.5v-11M3.5 7 8 2.5 12.5 7"/>',
+    down: '<path d="M8 2.5v11M3.5 9 8 13.5 12.5 9"/>',
+  };
+  // O ícone do app (o mesmo desenho de src/PokeDeck/icon.svg).
+  const LOGO = '<rect x="6" y="1" width="9" height="12" fill="#480e1e"/><rect x="7" y="2" width="7" height="10" fill="#722c3f"/><rect x="7" y="2" width="7" height="1" fill="#914850"/>' +
+    '<rect x="4" y="2" width="9" height="12" fill="#480e1e"/><rect x="5" y="3" width="7" height="10" fill="#914850"/><rect x="5" y="3" width="7" height="1" fill="#bd6951"/>' +
+    '<rect x="2" y="3" width="9" height="12" fill="#480e1e"/><rect x="3" y="4" width="7" height="10" fill="#bd6951"/><rect x="3" y="4" width="7" height="1" fill="#f1d3b7"/>' +
+    '<rect x="3" y="5" width="1" height="8" fill="#df824c"/><rect x="3" y="13" width="7" height="1" fill="#914850"/><rect x="6" y="6" width="1" height="5" fill="#e2a93f"/>' +
+    '<rect x="4" y="8" width="5" height="1" fill="#e2a93f"/><rect x="6" y="7" width="1" height="3" fill="#ffe07a"/><rect x="5" y="8" width="3" height="1" fill="#ffe07a"/><rect x="6" y="8" width="1" height="1" fill="#fff7d0"/>';
   const KINDS = [['', 'não resgatar'], ['xp', '+15% XP (300)'], ['captura', '+15% Captura (500)'], ['shiny', '+15% Shiny (1000)']];
 </script>
 
 <div class="app">
+  {#snippet icon(name, size = 14)}
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{@html ICONS[name]}</svg>
+  {/snippet}
+
   <header class="bar">
     <strong class="logo">
-      <svg width="20" height="20" viewBox="0 0 160 160" aria-hidden="true">
-        <rect width="160" height="160" rx="36" fill="#1b1e27" /><rect x="30" y="30" width="46" height="46" rx="10" fill="#f2c94c" />
-        <rect x="84" y="30" width="46" height="46" rx="10" fill="#3a4157" /><rect x="30" y="84" width="46" height="46" rx="10" fill="#3a4157" />
-        <rect x="84" y="84" width="46" height="46" rx="10" fill="#3a4157" /><circle cx="107" cy="107" r="7" fill="#a970ff" /><circle cx="53" cy="107" r="7" fill="#53fc18" />
-      </svg>
+      <svg width="24" height="24" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">{@html LOGO}</svg>
       PokeDeck
     </strong>
     {#if config}
-      <div class="group">
-        <button class:on={config.Layout === 'grid'} onclick={() => setLayout('grid')}>Grade</button>
-        <button class:on={config.Layout === 'cols'} onclick={() => setLayout('cols')}>Colunas</button>
+      <div class="seg" role="group" aria-label="Arrumação">
+        <button class:on={config.Layout === 'grid'} onclick={() => setLayout('grid')}>{@render icon('grid', 13)}Grade</button>
+        <button class:on={config.Layout === 'cols'} onclick={() => setLayout('cols')}>{@render icon('cols', 13)}Colunas</button>
       </div>
+      <span class="sep"></span>
       <div class="group">
-        <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Ultra)} onclick={() => toggleAll('Ultra')} title="Modo ULTRA Economia do jogo (recarrega as contas)">⚡ ULTRA</button>
-        <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Economy)} onclick={() => toggleAll('Economy')} title="Modo Economia do jogo (recarrega as contas)">🔋 Economia</button>
-        <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Muted)} onclick={() => toggleAll('Muted')}>🔇 Mudo</button>
+        <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Ultra)} onclick={() => toggleAll('Ultra')} title="Modo ULTRA Economia do jogo (recarrega as contas)">{@render icon('bolt')}ULTRA</button>
+        <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Economy)} onclick={() => toggleAll('Economy')} title="Modo Economia do jogo (recarrega as contas)">{@render icon('battery')}Economia</button>
+        <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Muted)} onclick={() => toggleAll('Muted')}>{@render icon('mute')}Mudo</button>
         <button class:on={status.echo} onclick={() => send({ t: 'echo', on: !status.echo })}
-          title="Eco: o que você faz no jogo de uma conta se repete nas outras (a mesma ação, pelo jogo de cada uma). Chat, mensagens e ações num pokémon específico não se repetem.">⇄ Eco{status.echo ? ' ligado' : ''}</button>
-        {#if off.length}
-          <button onclick={() => save({ ...$state.snapshot(config), Accounts: config.Accounts.map((a) => ({ ...$state.snapshot(a), On: true })) })}>⏻ Ligar todas</button>
-        {:else}
-          <button onclick={() => save({ ...$state.snapshot(config), Accounts: config.Accounts.map((a) => ({ ...$state.snapshot(a), On: false })) })}>⏻ Desligar todas</button>
-        {/if}
+          title="Eco: o que você faz no jogo de uma conta se repete nas outras (a mesma ação, pelo jogo de cada uma). Chat, mensagens e ações num pokémon específico não se repetem.">{@render icon('swap')}Eco{status.echo ? ' ligado' : ''}</button>
       </div>
+      <span class="sep"></span>
+      {#if off.length}
+        <button onclick={() => save({ ...$state.snapshot(config), Accounts: config.Accounts.map((a) => ({ ...$state.snapshot(a), On: true })) })}>{@render icon('power')}Ligar todas</button>
+      {:else}
+        <button onclick={() => save({ ...$state.snapshot(config), Accounts: config.Accounts.map((a) => ({ ...$state.snapshot(a), On: false })) })}>{@render icon('power')}Desligar todas</button>
+      {/if}
       <span class="spacer"></span>
-      {#each off as i}
-        <button onclick={() => setAccount(i, { On: true })} title="Ligar">⏻ {config.Accounts[i].Name}</button>
-      {/each}
+      {#if off.length}
+        <div class="seg off" role="group" aria-label="Contas desligadas">
+          {#each off as i}
+            <button onclick={() => setAccount(i, { On: true })} title="Ligar {config.Accounts[i].Name}"><span class="dot"></span>{config.Accounts[i].Name}</button>
+          {/each}
+        </div>
+      {/if}
       {#if status.update}
         <button class="on" class:bad={status.update.error} disabled={status.update.busy} onclick={askUpdate}
           title={status.update.error ? `A atualização falhou: ${status.update.error}` : 'Há uma versão nova do PokeDeck'}>
-          {status.update.busy ? `⬇ Baixando ${status.update.pct}%` : `⬆ Atualizar para ${status.update.version}`}</button>
+          {#if status.update.busy}{@render icon('down')}Baixando {status.update.pct}%{:else}{@render icon('up')}Atualizar para {status.update.version}{/if}</button>
       {/if}
-      <button class:on={fullscreen} onclick={() => send({ t: 'fullscreen' })} title="Tela cheia (F11)">⛶ Tela cheia</button>
-      <button onclick={() => send({ t: 'checkLives' })} title="Conferir agora quem está ao vivo">⟳ Lives</button>
-      <button class:on={panel === 'log'} onclick={() => (panel = panel === 'log' ? null : 'log')}>Registro</button>
-      <button class:on={panel === 'config'} onclick={() => (panel === 'config' ? (panel = null) : openConfig())}>⚙ Config</button>
+      <button class:on={fullscreen} onclick={() => send({ t: 'fullscreen' })} title="Tela cheia (F11)">{@render icon('full')}Tela cheia</button>
+      <button onclick={() => send({ t: 'checkLives' })} title="Conferir agora quem está ao vivo">{@render icon('refresh')}Lives</button>
+      <button class:on={panel === 'log'} onclick={() => (panel = panel === 'log' ? null : 'log')}>{@render icon('list')}Registro</button>
+      <button class:on={panel === 'config'} onclick={() => (panel === 'config' ? (panel = null) : openConfig())}>{@render icon('gear')}Config</button>
     {/if}
   </header>
 
@@ -249,7 +283,7 @@
           <div class="head">
             <span class="dot {ph[1]}" title={ph[0]}></span>
             <strong>{c.Name}</strong>
-            <span class="chip gold" title="Ouro">💰 {fmt(a.gold)}</span>
+            <span class="chip gold" title="Ouro"><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="#e2a93f" stroke="#7d5313" stroke-width="1.5" /><path d="M8 5v6" stroke="#7d5313" stroke-width="1.5" /></svg>{fmt(a.gold)}</span>
             {#each [['tw', 'T', 'Twitch', a.bonus?.twitch], ['kk', 'K', 'Kick', a.bonus?.kick]] as [cls, tag, site, map]}
               {#if map}
                 <span class="chip {cls}" title="Bônus da {site} ativos no jogo (tempo que falta)">{tag} {buffs(map).map(([k, sec]) => `${BUFF[k] ?? k} ${left(sec)}`).join(' · ') || '—'}</span>
@@ -263,21 +297,21 @@
                 <button class="mini kk" class:dim={!a.lives?.kickLogged} onclick={() => send({ t: 'login', i, site: 'kick' })}
                   title={livesTip('Kick', a.lives?.kickLogged, a.lives?.kick, [a.lives?.kickStopped])}>K {a.lives?.kick?.length ?? 0}</button>
                 {#each [['twitch', 'tw', 'T', c.RedeemTwitch, c.RedeemTwitchOn], ['kick', 'kk', 'K', c.RedeemKick, c.RedeemKickOn]] as [site, cls, tag, kind, on]}
-                  <button class="mini {cls}" class:dim={!kind || !on} class:off={kind && !on} disabled={!kind} onclick={() => toggleRedeem(i, site)} title={redeemTip(c, site)}>🎁{tag}</button>
+                  <button class="mini {cls}" class:on={kind && on} class:dim={!kind || !on} class:off={kind && !on} disabled={!kind} onclick={() => toggleRedeem(i, site)} title={redeemTip(c, site)}>{@render icon('gift', 13)}{tag}</button>
                 {/each}
               </span>
             {/if}
             {#each (a.extensions ?? []).filter((e) => e.Enabled && e.Page) as e (e.Id)}
-              <button class="mini" onclick={() => send({ t: 'extPopup', i, id: e.Id })} title={e.Name}>🧩 {e.Name.slice(0, 12)}</button>
+              <button class="mini" onclick={() => send({ t: 'extPopup', i, id: e.Id })} title={e.Name}>{@render icon('puzzle', 13)}{e.Name.slice(0, 12)}</button>
             {/each}
             {#if a.vote}
               <button class="mini" class:vote={a.vote.ready} onclick={() => send({ t: 'vote', i })} title={voteTip(a.vote)}>
-                🗳 {a.vote.voted ? '✓ Votou' : a.vote.ready ? 'Votar' : left(a.vote.left)}</button>
+                {@render icon(a.vote.voted ? 'check' : 'vote', 13)}{a.vote.voted ? 'Votou' : a.vote.ready ? 'Votar' : left(a.vote.left)}</button>
             {/if}
-            <button class="mini" onclick={() => setAccount(i, { Restock: { ...c.Restock, On: !c.Restock.On } })} class:on={c.Restock.On} title={c.Restock.On ? `Recompra ligada${a.restock?.paused ? ' (pausada)' : ''}` : 'Recompra desligada'}>🛒</button>
-            <button class="mini" onclick={() => send({ t: 'reload', i })} title="Recarregar">⟳</button>
-            <button class="mini" onclick={() => (config.Layout === 'focus' ? setLayout('grid') : setLayout('focus', i))} title="Ampliar / voltar">⤢</button>
-            <button class="mini" onclick={() => setAccount(i, { On: false })} title="Desligar esta conta">⏻</button>
+            <button class="mini" onclick={() => setAccount(i, { Restock: { ...c.Restock, On: !c.Restock.On } })} class:on={c.Restock.On} title={c.Restock.On ? `Recompra ligada${a.restock?.paused ? ' (pausada)' : ''}` : 'Recompra desligada'}>{@render icon('cart')}</button>
+            <button class="mini" onclick={() => send({ t: 'reload', i })} title="Recarregar">{@render icon('refresh', 13)}</button>
+            <button class="mini" onclick={() => (config.Layout === 'focus' ? setLayout('grid') : setLayout('focus', i))} title="Ampliar / voltar">{@render icon('expand', 13)}</button>
+            <button class="mini stop" onclick={() => setAccount(i, { On: false })} title="Desligar esta conta">{@render icon('power', 13)}</button>
           </div>
           <div class="body" bind:this={bodies[i]}>
             {#if panel}<div class="cover">{ph[0]}</div>{/if}
@@ -307,8 +341,8 @@
     <div class="overlay">
       <div class="sheet">
         <nav class="tabs">
-          <button class:on={logTab === 'redeems'} onclick={() => (logTab = 'redeems')}>Resgates e lives</button>
-          <button class:on={logTab === 'all'} onclick={() => (logTab = 'all')}>Geral</button>
+          <button class="tab" class:on={logTab === 'redeems'} onclick={() => (logTab = 'redeems')}>Resgates e lives</button>
+          <button class="tab" class:on={logTab === 'all'} onclick={() => (logTab = 'all')}>Geral</button>
           {#if logTab === 'redeems'}
             <span class="spacer"></span>
             <select bind:value={logAccount}>
@@ -348,10 +382,10 @@
     <div class="overlay">
       <div class="sheet">
         <nav class="tabs">
-          {#each draft.Accounts as a, i}<button class:on={tab === i} onclick={() => (tab = i)}>{a.Name}</button>{/each}
-          <button class:on={tab === 'lives'} onclick={() => (tab = 'lives')}>Lives</button>
-          <button class:on={tab === 'timing'} onclick={() => (tab = 'timing')}>Tempos e desempenho</button>
-          <button class:on={tab === 'ext'} onclick={() => (tab = 'ext')}>Extensões</button>
+          {#each draft.Accounts as a, i}<button class="tab" class:on={tab === i} onclick={() => (tab = i)}>{a.Name}</button>{/each}
+          <button class="tab" class:on={tab === 'lives'} onclick={() => (tab = 'lives')}>Lives</button>
+          <button class="tab" class:on={tab === 'timing'} onclick={() => (tab = 'timing')}>Tempos e desempenho</button>
+          <button class="tab" class:on={tab === 'ext'} onclick={() => (tab = 'ext')}>Extensões</button>
           <span class="spacer"></span>
           <button onclick={() => (panel = null)}>Cancelar</button>
           <button class="on" onclick={saveConfig}>Salvar</button>
@@ -468,7 +502,7 @@
               <label>Horário de bloqueio do resgate (todas as contas)
                 <input class="hhmm" bind:value={draft.RedeemBlockAt} placeholder="ex.: 22:00" maxlength="5"
                   class:bad={draft.RedeemBlockAt && !hhmm(draft.RedeemBlockAt)} title="Horário no formato HH:mm (ex.: 22:00). Vazio: sem bloqueio." /></label>
-              <span class="muted small">Antes de resgatar, cada conta confere se o buff dela já passa deste horário (se já passou hoje, vale o de amanhã). Se passa, desliga o 🎁 daquele site nela e registra. Vazio: sem bloqueio.</span>
+              <span class="muted small">Antes de resgatar, cada conta confere se o buff dela já passa deste horário (se já passou hoje, vale o de amanhã). Se passa, desliga o resgate daquele site nela e registra. Vazio: sem bloqueio.</span>
             </div>
           </div>
           <p class="muted small">As lives abertas são reconferidas ao salvar.</p>
@@ -518,9 +552,22 @@
 
 <style>
   .app { display: flex; flex-direction: column; height: 100%; }
-  .bar { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
-  .logo { color: var(--accent); letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 7px; }
+  /* A barra é uma placa de madeira, como as molduras do jogo: fio de luz em cima, veio escuro embaixo. */
+  .bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--bark); border-top: 1px solid var(--wood); border-bottom: 2px solid var(--grain); font-family: var(--tight); font-weight: 500; white-space: nowrap; }
+  .bar button { height: 28px; }
+  .bar button:not(.on) { background: var(--heart); border-color: var(--grain); box-shadow: inset 0 1px 0 rgba(241, 211, 183, 0.22); }
+  .bar button:not(.on):hover { border-color: var(--wood-light); }
+  .bar button.bad { background: var(--bad); border-color: var(--grain); color: var(--text); box-shadow: none; }
+  .logo { display: inline-flex; align-items: center; gap: 8px; padding-right: 12px; margin-right: 2px; border-right: 1px solid var(--heart); font: 600 19px var(--pixel); color: var(--gold-light); }
+  .logo svg { image-rendering: pixelated; }
   .group { display: flex; gap: 4px; }
+  .sep { width: 1px; height: 20px; margin: 0 4px; background: var(--heart); }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--grain); border-radius: 5px; }
+  .seg.off { background: var(--heart); margin-right: 4px; }
+  .bar .seg button { height: 26px; border-radius: 3px; padding: 0 9px; }
+  .bar .seg button:not(.on) { background: transparent; border-color: transparent; box-shadow: none; color: var(--wood-light); }
+  .bar .seg button:not(.on):hover { color: var(--text); }
+  .seg .dot { width: 7px; height: 7px; }
   .spacer { flex: 1; }
   .muted { color: var(--muted); }
 
@@ -528,69 +575,81 @@
   .deck.grid { grid-template-columns: repeat(min(var(--n), 2), 1fr); grid-auto-rows: 1fr; }
   .deck.cols { grid-template-columns: repeat(var(--n), 1fr); }
   .deck.focus { grid-template-columns: 1fr; }
-  .pane { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .pane { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border: 2px solid var(--grain); border-radius: 4px; overflow: hidden; }
   .pane.active { border-color: var(--accent); }
-  .head { display: flex; align-items: center; gap: 6px; padding: 4px 6px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+  .head { display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; flex-wrap: wrap; background: var(--panel-2); border-bottom: 1px solid var(--grain); font-size: 13px; }
+  .head strong { font-size: 14px; }
   .body { flex: 1; position: relative; min-height: 0; background: var(--bg); }
   .cover { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
   .empty { display: grid; place-items: center; color: var(--muted); }
 
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot { flex: none; width: 8px; height: 8px; border-radius: 1px; background: var(--muted); }
   .dot.ok { background: var(--ok); }
   .dot.warn { background: var(--warn); }
   .dot.bad { background: var(--bad); }
-  .chip { padding: 1px 7px; border-radius: 10px; background: var(--panel-2); color: var(--muted); white-space: nowrap; }
-  .chip.gold { color: var(--accent); }
+  .chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px; border-radius: 3px; background: var(--well); color: var(--muted); white-space: nowrap; }
+  .chip.gold { color: var(--gold-light); font-weight: 600; font-variant-numeric: tabular-nums; }
   .chip.active { color: var(--text); }
   .chip.tw, .mini.tw { color: var(--twitch); }
   .chip.kk, .mini.kk { color: var(--kick); }
-  .mini { padding: 1px 7px; }
+  .mini { height: 24px; min-width: 28px; justify-content: center; gap: 3px; padding: 0 6px; border-radius: 3px; background: var(--panel); color: var(--muted); font-weight: 600; }
+  .mini.on { background: var(--gold-bg); border-color: var(--accent); color: var(--gold-light); box-shadow: none; }
+  .mini.stop { color: var(--bad-text); }
   .mini.dim { opacity: 0.45; }
   .mini.off { text-decoration: line-through; }
-  .mini.vote { color: var(--accent); font-weight: 600; }
+  .mini.vote { color: var(--gold-light); border-color: var(--accent); }
   .lives { display: inline-flex; gap: 4px; }
 
-  .overlay { position: fixed; inset: 44px 0 0 0; background: rgba(10, 11, 15, 0.92); display: grid; place-items: center; }
-  .sheet { width: min(980px, 96vw); max-height: 92%; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; user-select: text; }
-  .tabs { display: flex; gap: 6px; flex-wrap: wrap; position: sticky; top: -14px; background: var(--panel); padding: 6px 0 10px; }
+  .overlay { position: fixed; inset: 44px 0 0 0; background: rgba(20, 10, 15, 0.92); display: grid; place-items: center; }
+  .sheet { width: min(1000px, 96vw); max-height: 92%; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 14px 20px 20px; user-select: text; }
+  .tabs { display: flex; gap: 2px; flex-wrap: wrap; align-items: flex-end; position: sticky; top: -14px; z-index: 1; background: var(--panel); padding: 8px 0 0; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .tabs > button:not(.tab), .tabs > select { margin-bottom: 6px; }
+  .tabs > button:not(.tab) + button:not(.tab) { margin-left: 6px; }
+  .tabs .tab { height: 34px; padding: 0 14px; border: 1px solid transparent; border-bottom: 0; border-radius: 4px 4px 0 0; background: transparent; color: var(--muted); font-weight: 400; box-shadow: none; }
+  .tabs .tab:hover { color: var(--text); }
+  .tabs .tab.on { height: 36px; margin-bottom: -1px; background: var(--panel); color: var(--text); font-weight: 600; border-color: var(--line); border-top: 2px solid var(--accent); border-bottom: 1px solid var(--panel); }
   .hhmm { width: 80px; }
   .ask { width: min(520px, 92vw); }
   .ask p { white-space: pre-line; line-height: 1.5; margin: 4px 0 14px; }
-  .form { display: flex; flex-direction: column; gap: 9px; align-items: flex-start; }
-  h2, h3 { margin: 8px 0 2px; font-weight: 600; }
-  h3 { color: var(--accent); font-size: 13px; }
+  .form { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+  h2, h3 { margin: 10px 0 2px; font-weight: 600; }
+  h3 { font: 600 16px var(--pixel); color: var(--honey); }
   .rules td, .rules th { padding: 3px 8px 3px 0; text-align: left; font-weight: normal; color: var(--muted); }
   .rules td { color: var(--text); }
-  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; }
-  .card { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
-  .card-head { display: flex; align-items: center; gap: 8px; }
-  .pill { padding: 2px 10px; border-radius: 10px; background: var(--panel-2); }
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%; }
+  .card { background: var(--panel-2); border: 1px solid var(--grain); border-radius: 4px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+  .card-head { display: flex; align-items: center; gap: 10px; }
+  .card-head strong { font: 600 16px var(--pixel); color: var(--honey); }
+  .pill { padding: 2px 8px; border-radius: 3px; background: var(--panel); font-weight: 700; }
   .pill.tw { color: var(--twitch); }
   .pill.kk { color: var(--kick); }
   .between { justify-content: space-between; }
-  .small { font-size: 12px; }
-  .stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; }
-  .stepper button { border: none; border-radius: 0; background: transparent; padding: 3px 12px; }
-  .stepper b { min-width: 36px; text-align: center; font-weight: 600; }
+  .small { font-size: 13px; }
+  .stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); }
+  .stepper button { border: none; border-radius: 0; background: transparent; padding: 4px 12px; color: var(--wood-light); }
+  .stepper b { min-width: 30px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
   .grid { width: 100%; border-collapse: collapse; }
-  .grid th { text-align: left; font-weight: normal; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); }
-  .grid td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .grid th { text-align: left; font-weight: 500; font-size: 13px; color: var(--muted); padding: 8px; border-bottom: 1px solid var(--grain); }
+  .grid td { padding: 7px 8px; border-bottom: 1px solid var(--well); }
   .grid select { width: 100%; }
-  .switch { appearance: none; width: 34px; height: 18px; border-radius: 9px; background: var(--line); position: relative; cursor: pointer; border: none; padding: 0; }
-  .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: left 0.15s; }
-  .switch:checked { background: #6c4bd8; }
-  .switch:checked::after { left: 18px; background: #fff; }
-  .redeems td.tw { color: var(--twitch); }
-  .redeems td.kk { color: var(--kick); }
-  .kind { padding: 1px 8px; border-radius: 9px; background: var(--panel-2); white-space: nowrap; }
-  .k-resgate, .k-baú { color: var(--ok); }
-  .k-recusado, .k-baú-recusado, .k-devolvido { color: var(--bad); }
-  .k-gasto-fora { color: var(--warn); }
-  .k-guarda { color: var(--accent); }
-  .k-bloqueio { color: var(--warn); }
+  .switch { appearance: none; width: 38px; height: 22px; border-radius: 4px; background: var(--panel-2); position: relative; cursor: pointer; border: 1px solid var(--line); padding: 0; box-shadow: none; }
+  .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 2px; background: var(--muted); transition: left 0.12s; }
+  .switch:checked { background: var(--gold-rim); border-color: var(--bronze); }
+  .switch:checked::after { left: 18px; background: var(--gold-light); box-shadow: inset 0 -2px 0 var(--accent); }
+  .redeems td.tw { color: var(--twitch); font-weight: 600; }
+  .redeems td.kk { color: var(--kick); font-weight: 600; }
+  .redeems tbody tr:nth-child(even) { background: #22141c; }
+  .redeems td:first-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .kind { padding: 1px 8px; border-radius: 3px; background: var(--well); font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .k-baú { color: var(--ok); background: rgba(111, 208, 138, 0.14); }
+  .k-resgate { color: var(--gold-light); background: rgba(226, 169, 63, 0.16); }
+  .k-guarda { color: var(--honey); background: rgba(231, 168, 109, 0.16); }
+  .k-gasto-fora { color: var(--warn); background: rgba(240, 160, 60, 0.14); }
+  .k-recusado, .k-baú-recusado, .k-devolvido, .k-bloqueio { color: var(--bad-text); background: rgba(216, 87, 74, 0.2); }
   .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .wide { width: 100%; }
   .grow { flex: 1; }
-  .bad { color: var(--bad); }
+  .bad { color: var(--bad-text); }
+  input.bad { border-color: var(--bad); }
   .log { font: 12px/1.45 Consolas, monospace; white-space: pre-wrap; margin: 0; }
 </style>
