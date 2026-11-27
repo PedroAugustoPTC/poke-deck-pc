@@ -235,3 +235,68 @@ public class ParseTests
         Assert.Equal(new[] { "rodil" }, c.TwitchChannels);
     }
 }
+
+public class IdleHubTests
+{
+    private static readonly DateTime Now = new(2026, 11, 26, 12, 0, 0);
+    private static JsonElement J(string json) => JsonDocument.Parse(json).RootElement;
+
+    [Fact]
+    public void Parses_the_game_vote_state()
+    {
+        var s = IdleHub.ParseState(J("""{"status":200,"nick":"ash","dados":{"ativo":true,"esperaMs":60000,"votos":7,"noPar":1,"porPar":5,"votosPorDiamante":2}}"""), Now)!;
+        Assert.True(s.LoggedIn && s.Active);
+        Assert.Equal(Now.AddMinutes(1), s.NextVoteAt);
+        Assert.False(s.ReadyAt(Now));
+        Assert.True(s.ReadyAt(Now.AddMinutes(2)));
+        Assert.Equal("https://idlehub.io/votar/pokeidle-io?jogador=ash", s.Url);
+        Assert.Equal((7, 1, 5, 2), (s.Votes, s.InPair, s.PerPair, s.VotesPerReward));
+    }
+
+    [Fact]
+    public void Login_missing_hides_and_failures_retry()
+    {
+        Assert.False(IdleHub.ParseState(J("""{"erro":"login"}"""), Now)!.LoggedIn);
+        Assert.False(IdleHub.ParseState(J("""{"status":401}"""), Now)!.LoggedIn);
+        Assert.Null(IdleHub.ParseState(J("""{"erro":"pagina"}"""), Now));
+        Assert.Null(IdleHub.ParseState(J("""{"status":500,"dados":null}"""), Now));
+    }
+
+    [Fact]
+    public void Only_idlehub_links_and_safe_nicks()
+    {
+        Assert.Equal("https://idlehub.io/votar/pokeidle-io", IdleHub.VoteUrl("a b&c"));
+        var s = IdleHub.ParseState(J("""{"status":200,"dados":{"ativo":true,"url":"https://evil.com/x","identificador":"misty"}}"""), Now)!;
+        Assert.Equal("https://idlehub.io/votar/pokeidle-io?jogador=misty", s.Url);
+        Assert.True(s.ReadyAt(Now));
+    }
+
+    [Fact]
+    public void Detects_the_vote_response()
+    {
+        Assert.True(IdleHub.IsVoteResponse("POST", "https://idlehub.io/api/votar", 200));
+        Assert.False(IdleHub.IsVoteResponse("POST", "https://idlehub.io/api/auth/session", 200));
+        Assert.False(IdleHub.IsVoteResponse("GET", "https://idlehub.io/api/votar", 200));
+        Assert.True(IdleHub.TryParseVoted("""{"ok":true,"proximoEm":1795000000000}""", out var next));
+        Assert.NotNull(next);
+        Assert.False(IdleHub.TryParseVoted("""{"ok":false}""", out _));
+        Assert.False(IdleHub.TryParseVoted("<html>", out _));
+    }
+}
+
+public class EchoTests
+{
+    [Theory]
+    [InlineData("""{"t":"centro.curar"}""", true)]
+    [InlineData("""{"t":"hunt.select","slug":"rota-1"}""", true)]
+    [InlineData("""{"t":"shop.buy","kind":"ball","id":1,"qty":10}""", true)]
+    [InlineData("""{"t":"ping"}""", false)]
+    [InlineData("""{"t":"chat.send","canal":"mundo","texto":"oi"}""", false)]
+    [InlineData("""{"t":"amigo.aceitar","de":"x"}""", false)]
+    [InlineData("""{"t":"team.active","pokemonId":123}""", false)]
+    [InlineData("""{"t":"pokemon.evoluir","pokemonId":1,"alvoId":2}""", false)]
+    [InlineData("""not json""", false)]
+    [InlineData("""[1]""", false)]
+    public void Repeats_only_actions_valid_in_any_account(string message, bool repeat) =>
+        Assert.Equal(repeat, Echo.ShouldRepeat(message));
+}

@@ -14,6 +14,8 @@
   let mirror = null;
   let mirrorAt = 0;
   let skew = 0;
+  let fromApp = false; // o envio em curso é do app (recompra, eco vindo de outra conta): não volta como eco
+  let clickedAt = -1e9;
 
   const post = (o) => {
     try { window.chrome.webview.postMessage(o); } catch { }
@@ -32,9 +34,20 @@
     });
   }
 
+  // Eco: as mensagens que o jogo manda logo depois de um clique de verdade seu vão para o app, que as repete nas
+  // outras contas (se o Eco estiver ligado). Mensagens do próprio jogo sozinho (ping, automações) ficam de fora.
+  for (const type of ['pointerdown', 'click']) {
+    window.addEventListener(type, (e) => { if (e.isTrusted) clickedAt = performance.now(); }, true);
+  }
+
   function attach(ws) {
     socket = ws;
     acc = null;
+    const nativeSend = ws.send;
+    ws.send = function (data) {
+      if (!fromApp && typeof data === 'string' && performance.now() - clickedAt < 1500) post({ t: 'echo', msg: data });
+      return nativeSend.apply(this, arguments);
+    };
     ws.addEventListener('message', (e) => {
       if (ws === socket) receive(e.data);
     });
@@ -190,7 +203,8 @@
     value: Object.freeze({
       send(text) {
         if (socket?.readyState !== 1 || typeof text !== 'string') return false;
-        socket.send(text);
+        fromApp = true;
+        try { socket.send(text); } finally { fromApp = false; }
         return true;
       },
     }),

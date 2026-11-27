@@ -31,6 +31,7 @@ internal sealed class Account : IDisposable
     private TwitchPubSub? _ps;
     private string? _twitchToken, _twitchDevice, _twitchUser, _kickToken;
     private bool _busyTwitch, _busyKick;
+    private DateTime _voteCheckAt, _votedAt;
 
     public Account(int index, MainForm host)
     {
@@ -43,6 +44,7 @@ internal sealed class Account : IDisposable
     public WebView2? Game { get; private set; }
     public GameState? State { get; private set; }
     public string Phase { get; private set; } = "off";
+    public VoteState? Vote { get; private set; }
     public List<string> TwitchOpen { get; private set; } = new();
     public List<string> KickOpen { get; private set; } = new();
     private AccountConfig Cfg => _host.Config.Accounts[Index];
@@ -88,6 +90,14 @@ internal sealed class Account : IDisposable
             if (!e.IsSuccess && e.WebErrorStatus != CoreWebView2WebErrorStatus.OperationCanceled)
                 SetPhase("failed");
         };
+        core.NewWindowRequested += (_, e) =>
+        {
+            if (!IdleHub.IsIdleHubLink(e.Uri))
+                return;
+            // O "Votar no IdleHub.io" de dentro do jogo abre na janela de voto do app, que percebe quando o voto entra.
+            e.Handled = true;
+            _host.OpenVote(Index, e.Uri);
+        };
         core.ProcessFailed += (_, e) =>
         {
             Log.Write(Index, $"o navegador da conta caiu ({e.ProcessFailedKind}); recarregando");
@@ -104,6 +114,7 @@ internal sealed class Account : IDisposable
         _ = Jitter.Every(() => TimeSpan.FromSeconds(Timing.KickPointsSec), () => Timing.JitterPct, KickPointsAsync, stop, TimeSpan.FromSeconds(60));
         _ = Jitter.Every(() => TimeSpan.FromSeconds(Timing.GuardSec), () => Timing.JitterPct,
             async () => { await GuardAsync("twitch"); await GuardAsync("kick"); }, stop, TimeSpan.FromSeconds(90));
+        _ = Jitter.Every(() => TimeSpan.FromSeconds(20), () => 0.5, VoteCheckAsync, stop, TimeSpan.FromSeconds(30));
         Log.Write(Index, "conta ligada");
     }
 
@@ -119,6 +130,8 @@ internal sealed class Account : IDisposable
             Log.Write(Index, "conta desligada");
         }
         State = null;
+        Vote = null;
+        _voteCheckAt = default;
         Active = false;
         _prefsScriptId = null;
         Phase = "off";
@@ -137,7 +150,7 @@ internal sealed class Account : IDisposable
         Phase = phase;
         _phaseSince = DateTime.Now;
         if (phase == "game")
-            _reloads = 0;
+            (_reloads, _voteCheckAt) = (0, default); // entrou no jogo (login, recarga): confere o voto logo
     }
 
     /// <summary>Recarrega o jogo preso na abertura (ou que não carregou), esperando mais a cada vez: 1, 2 … 5 min.</summary>
@@ -182,6 +195,9 @@ internal sealed class Account : IDisposable
             case "refused":
                 _restock.Refused(m.GetProperty("msg").GetString() ?? "");
                 break;
+            case "echo":
+                _host.Echo(Index, m.GetProperty("msg").GetString() ?? "");
+                break;
         }
     }
 
@@ -206,7 +222,7 @@ internal sealed class Account : IDisposable
         _ = Game?.CoreWebView2?.ExecuteScriptAsync($"window.__pdFps={fps};window.__pdSpriteMs={sprite}");
     }
 
-    private void Send(string message) =>
+    public void Send(string message) =>
         _ = Game?.CoreWebView2?.ExecuteScriptAsync($"window.__pd && window.__pd.send({JsonSerializer.Serialize(message)})");
 
     /// <summary>
@@ -262,6 +278,55 @@ internal sealed class Account : IDisposable
             Log.Write(Index, $"ULTRA {(Cfg.Ultra ? "ligado" : "desligado")}, Economia {(Cfg.Economy ? "ligada" : "desligada")}: recarregando o jogo");
             Reload();
         }
+    }
+
+    // ---------------- voto no IdleHub ----------------
+
+    private bool JustVoted => DateTime.Now - _votedAt < TimeSpan.FromMinutes(3);
+
+    /// <summary>Pergunta ao jogo (na página da conta) quando o voto libera: a cada ~30 min, ou logo que liberar.</summary>
+    private async Task VoteCheckAsync()
+    {
+        if (Phase != "game" || DateTime.Now < _voteCheckAt || Game?.CoreWebView2 is not CoreWebView2 core)
+            return;
+        _voteCheckAt = DateTime.Now.AddMinutes(5); // se a pergunta travar ou falhar, tenta de novo daqui a 5 min
+        var call = core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
+            JsonSerializer.Serialize(new { expression = IdleHub.StateScript, awaitPromise = true, returnByValue = true }));
+        if (await Task.WhenAny(call, Task.Delay(TimeSpan.FromSeconds(30))) != call)
+            return;
+        VoteState? state = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(await call);
+            if (doc.RootElement.TryGetProperty("result", out var r) && r.TryGetProperty("value", out var v))
+                state = IdleHub.ParseState(v, DateTime.Now);
+        }
+        catch (Exception ex) when (ex is JsonException or System.Runtime.InteropServices.COMException or InvalidOperationException)
+        {
+            return;
+        }
+        var now = DateTime.Now;
+        if (state is null)
+            _voteCheckAt = now.AddMinutes(1); // a página não estava no jogo ou o jogo não respondeu
+        else if (state.ReadyAt(now) && JustVoted)
+            _voteCheckAt = now.AddSeconds(20); // o jogo ainda não recebeu o voto: segura o "votou"
+        else
+        {
+            Vote = state;
+            var next = now + Jitter.Of(TimeSpan.FromMinutes(state.LoggedIn ? 30 : 2), Timing.JitterPct);
+            if (state.NextVoteAt is DateTime at && at > now && at.AddSeconds(3) < next)
+                next = at + Jitter.Between(TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(15));
+            _voteCheckAt = next;
+        }
+    }
+
+    /// <summary>A janela de voto viu o voto entrar: o botão vira "votou" e o jogo é consultado logo depois.</summary>
+    public void MarkVoted(DateTime? next)
+    {
+        _votedAt = DateTime.Now;
+        if (Vote is VoteState state && next is DateTime at && at > DateTime.Now)
+            Vote = state with { NextVoteAt = at };
+        _voteCheckAt = DateTime.Now.AddSeconds(3);
     }
 
     // ---------------- lives ----------------
@@ -533,6 +598,7 @@ internal sealed class Account : IDisposable
     public object Snapshot()
     {
         var s = State;
+        var now = DateTime.Now;
         var pots = s?.Shop.Where(i => i.Category == "heal").ToList() ?? new();
         var revs = s?.Shop.Where(i => i.Category == "revive").ToList() ?? new();
         object Lives(IEnumerable<string> open, Func<string, string> watch, Points pts) =>
@@ -555,6 +621,18 @@ internal sealed class Account : IDisposable
             restock = new { paused = _restock.Paused, potion = _restock.PotionPick },
             ballCatalog = s?.BallCatalog.Where(b => b.Buyable).Select(b => new { id = b.Id, name = b.Name, price = b.Price }),
             potionList = pots.Select(p => new { id = p.Id, name = p.Name, price = p.Price }),
+            // Sem login no jogo ou com o Vote & Ganhe desligado no servidor o voto não daria nada: sem botão.
+            vote = Vote is not { LoggedIn: true, Active: true } v ? null : new
+            {
+                ready = v.ReadyAt(now) && !JustVoted,
+                voted = JustVoted,
+                left = v.NextVoteAt is DateTime at && at > now ? (int)(at - now).TotalSeconds : 0,
+                nick = v.Nick,
+                votes = v.Votes,
+                inPair = v.InPair,
+                perPair = v.PerPair,
+                perReward = v.VotesPerReward,
+            },
             bonus = new { twitch = s?.Twitch?.Left, kick = s?.Kick?.Left, twitchLinked = s?.Twitch?.Linked, kickLinked = s?.Kick?.Linked },
             lives = new
             {

@@ -22,6 +22,8 @@ internal sealed class MainForm : Form
     private WebView2? _ui;
     private Dictionary<string, bool?> _twitchLive = new(), _kickLive = new();
     private bool _checking;
+    private bool _echo; // não fica salvo: o Eco sempre abre desligado
+    private readonly Form?[] _voteWindows = new Form?[Config.MaxAccounts];
 
     public MainForm()
     {
@@ -163,6 +165,7 @@ internal sealed class MainForm : Form
         redeems = Log.RedeemLines(),
         twitchLive = _twitchLive,
         kickLive = _kickLive,
+        echo = _echo,
     });
 
     private async void OnUi(string json)
@@ -190,6 +193,13 @@ internal sealed class MainForm : Form
                     break;
                 case "fullscreen":
                     ToggleFullscreen();
+                    break;
+                case "vote":
+                    OpenVote(m.GetProperty("i").GetInt32());
+                    break;
+                case "echo":
+                    _echo = m.GetProperty("on").GetBoolean();
+                    Log.Write(null, _echo ? "Eco ligado" : "Eco desligado");
                     break;
                 case "checkLives":
                     await CheckLivesAsync();
@@ -285,6 +295,81 @@ internal sealed class MainForm : Form
         {
             _checking = false;
         }
+    }
+
+    // ---------------- eco ----------------
+
+    /// <summary>
+    /// Eco: a mensagem que o jogo de uma conta mandou por um clique seu vai, no socket do jogo, às outras contas no
+    /// jogo, cada uma com um atraso próprio (nada sai junto no mesmo instante).
+    /// </summary>
+    public void Echo(int from, string message)
+    {
+        if (!_echo || !Core.Echo.ShouldRepeat(message))
+            return;
+        var targets = _accounts.Where(a => a.Index != from && a.Phase == "game").ToList();
+        foreach (var a in targets)
+            _ = Task.Delay(Jitter.Between(TimeSpan.FromMilliseconds(150), TimeSpan.FromMilliseconds(900)))
+                .ContinueWith(_ => BeginInvoke(() => a.Send(message)));
+        if (targets.Count > 0)
+            Log.Write(from, $"eco: {message[..Math.Min(80, message.Length)]} → {targets.Count} conta(s)");
+    }
+
+    // ---------------- voto no IdleHub ----------------
+
+    /// <summary>
+    /// A página de voto do IdleHub no perfil da conta (onde fica o login do IdleHub dela), já com o nick. Quem vota é
+    /// você; o app lê a resposta do voto e atualiza o botão.
+    /// </summary>
+    public async void OpenVote(int index, string? url = null)
+    {
+        var account = _accounts[index];
+        if (_env is null || account.Game is null)
+            return;
+        url ??= account.Vote?.Url ?? IdleHub.VoteUrl(account.State?.Nick);
+        if (_voteWindows[index] is { IsDisposed: false } open)
+        {
+            if (open.Controls[0] is WebView2 { CoreWebView2: CoreWebView2 c })
+                c.Navigate(url);
+            if (open.WindowState == FormWindowState.Minimized)
+                open.WindowState = FormWindowState.Normal;
+            open.Activate();
+            return;
+        }
+        var name = Config.Accounts[index].Name;
+        var form = new Form { Text = $"Votar com {name} · quem vota é você, nesta página do IdleHub.io", Size = new System.Drawing.Size(1100, 820), StartPosition = FormStartPosition.CenterParent, Icon = Program.AppIcon };
+        var view = new WebView2 { Dock = DockStyle.Fill };
+        form.Controls.Add(view);
+        form.FormClosed += (_, _) => _voteWindows[index] = null;
+        _voteWindows[index] = form;
+        form.Show(this);
+        var options = _env.CreateCoreWebView2ControllerOptions();
+        options.ProfileName = account.Profile;
+        await view.EnsureCoreWebView2Async(_env, options);
+        view.CoreWebView2.WebResourceResponseReceived += async (_, e) =>
+        {
+            if (e.Response is null || !IdleHub.IsVoteResponse(e.Request.Method, e.Request.Uri, e.Response.StatusCode))
+                return;
+            string body;
+            try
+            {
+                using var stream = await e.Response.GetContentAsync();
+                if (stream is null)
+                    return;
+                body = await new StreamReader(stream).ReadToEndAsync();
+            }
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or IOException or InvalidOperationException)
+            {
+                return;
+            }
+            if (IdleHub.TryParseVoted(body, out var next) && !form.IsDisposed)
+            {
+                form.Text = $"✓ Voto registrado com {name}! Pode fechar esta janela";
+                account.MarkVoted(next);
+                Log.Write(index, "voto registrado no IdleHub.io");
+            }
+        };
+        view.CoreWebView2.Navigate(url);
     }
 
     // ---------------- extensões (uma lista por conta: cada conta tem o seu perfil) ----------------

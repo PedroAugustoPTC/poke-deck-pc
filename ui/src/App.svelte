@@ -126,6 +126,17 @@
       ...notes.filter(Boolean).map((n) => `⚠ ${n}`), '', `Clique para abrir a ${site} desta conta.`].join('\n');
   }
 
+  // A dica do 🗳: o estado do voto no IdleHub e quanto falta para o próximo diamante.
+  function voteTip(v) {
+    const head = v.voted ? 'Voto registrado no IdleHub.io. Conferindo no jogo quando libera o próximo…'
+      : v.ready ? `Voto liberado no IdleHub.io${v.nick ? ` para ${v.nick}` : ''}. Clique para votar: quem vota é você, na página do IdleHub (na primeira vez, entre com o Google ou o Discord; o login fica salvo nesta conta).`
+      : `Esta conta já votou. O próximo voto libera em ${left(v.left)}.`;
+    if (!(v.perReward > 0)) return head;
+    const missing = Math.max(1, v.perReward - v.inPair);
+    return `${head}
+${v.votes} votos · ${missing === 1 ? 'falta 1 voto' : `faltam ${missing} votos`} para o próximo 💎 (${v.perPair} 💎 a cada ${v.perReward} votos)`;
+  }
+
   const fmt = (n) => (n == null ? '—' : Math.round(n).toLocaleString('pt-BR'));
   const left = (s) => (!s ? '—' : s >= 3600 ? `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}` : `${Math.max(1, Math.floor(s / 60))}min`);
   const PHASE = { game: ['no jogo', 'ok'], login: ['tela de login', 'warn'], loading: ['carregando…', 'muted'], failed: ['não carregou', 'bad'], elsewhere: ['aberta em outro lugar', 'bad'], off: ['desligada', 'muted'] };
@@ -151,6 +162,8 @@
         <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Ultra)} onclick={() => toggleAll('Ultra')} title="Modo ULTRA Economia do jogo (recarrega as contas)">⚡ ULTRA</button>
         <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Economy)} onclick={() => toggleAll('Economy')} title="Modo Economia do jogo (recarrega as contas)">🔋 Economia</button>
         <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Muted)} onclick={() => toggleAll('Muted')}>🔇 Mudo</button>
+        <button class:on={status.echo} onclick={() => send({ t: 'echo', on: !status.echo })}
+          title="Eco: o que você faz no jogo de uma conta se repete nas outras (a mesma ação, pelo jogo de cada uma). Chat, mensagens e ações num pokémon específico não se repetem.">⇄ Eco{status.echo ? ' ligado' : ''}</button>
         {#if off.length}
           <button onclick={() => save({ ...$state.snapshot(config), Accounts: config.Accounts.map((a) => ({ ...$state.snapshot(a), On: true })) })}>⏻ Ligar todas</button>
         {:else}
@@ -199,6 +212,10 @@
             {#each (a.extensions ?? []).filter((e) => e.Enabled && e.Page) as e (e.Id)}
               <button class="mini" onclick={() => send({ t: 'extPopup', i, id: e.Id })} title={e.Name}>🧩 {e.Name.slice(0, 12)}</button>
             {/each}
+            {#if a.vote}
+              <button class="mini" class:vote={a.vote.ready} onclick={() => send({ t: 'vote', i })} title={voteTip(a.vote)}>
+                🗳 {a.vote.voted ? '✓ Votou' : a.vote.ready ? 'Votar' : left(a.vote.left)}</button>
+            {/if}
             <button class="mini" onclick={() => setAccount(i, { Restock: { ...c.Restock, On: !c.Restock.On } })} class:on={c.Restock.On} title="Recompra">🛒</button>
             <button class="mini" onclick={() => send({ t: 'reload', i })} title="Recarregar">⟳</button>
             <button class="mini" onclick={() => (config.Layout === 'focus' ? setLayout('grid') : setLayout('focus', i))} title="Ampliar / voltar">⤢</button>
@@ -451,6 +468,7 @@
   .chip.kk, .mini.kk { color: var(--kick); }
   .mini { padding: 1px 7px; }
   .mini.dim { opacity: 0.45; }
+  .mini.vote { color: var(--accent); font-weight: 600; }
   .lives { display: inline-flex; gap: 4px; }
 
   .overlay { position: fixed; inset: 44px 0 0 0; background: rgba(10, 11, 15, 0.92); display: grid; place-items: center; }
