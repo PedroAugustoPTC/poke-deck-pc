@@ -34,13 +34,7 @@ internal static class Program
             MessageBox.Show("O PokeDeck já está aberto.", "PokeDeck", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        try
-        {
-            File.Delete(OldExe);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
+        _ = DeleteOldExeAsync();
         try
         {
             CoreWebView2Environment.GetAvailableBrowserVersionString();
@@ -52,5 +46,25 @@ internal static class Program
             return;
         }
         Application.Run(new MainForm());
+    }
+
+    /// <summary>
+    /// O exe antigo solta o mutex antes de o processo terminar de sair, e até lá o Windows não deixa apagar o arquivo:
+    /// tenta de novo por até 2 minutos.
+    /// </summary>
+    private static async Task DeleteOldExeAsync()
+    {
+        for (int i = 0; i < 120 && File.Exists(OldExe); i++)
+        {
+            try
+            {
+                File.Delete(OldExe);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                await Task.Delay(1000);
+            }
+        }
     }
 }
