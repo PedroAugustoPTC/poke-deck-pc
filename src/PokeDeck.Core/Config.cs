@@ -33,6 +33,12 @@ public sealed class Config
 
     public Timing Timing { get; set; } = new();
 
+    /// <summary>
+    /// O tour de primeiro acesso já foi visto (ou pulado). Começa true para quem atualiza (o config.json antigo não tem o
+    /// campo); só o <see cref="Load"/> sem arquivo nenhum, o primeiro acesso, devolve false.
+    /// </summary>
+    public bool TourDone { get; set; } = true;
+
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
     public static Config Load(string path)
@@ -45,8 +51,9 @@ public sealed class Config
         catch (JsonException)
         {
             File.Copy(path, path + ".bad", true); // não perde o arquivo que não abriu
+            return new Config();
         }
-        return new Config();
+        return new Config { TourDone = File.Exists(path) };
     }
 
     public void Save(string path)

@@ -20,6 +20,11 @@
   let logSite = $state('');
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && panel === 'ask') panel = null;
+    if (touring) {
+      if (e.key === 'Escape') endTour();
+      else if (e.key === 'ArrowRight' || e.key === 'Enter') tourGo(1);
+      else if (e.key === 'ArrowLeft') tourGo(-1);
+    }
     if (e.key === 'F11') {
       e.preventDefault();
       send({ t: 'fullscreen' });
@@ -37,8 +42,10 @@
 
   host?.addEventListener('message', (e) => {
     const m = e.data;
-    if (m?.t === 'config') config = m.config;
-    else if (m?.t === 'status') status = m;
+    if (m?.t === 'config') {
+      config = m.config;
+      if (!config.TourDone && !panel && !touring) startTour();
+    } else if (m?.t === 'status') status = m;
     else if (m?.t === 'fullscreen') fullscreen = m.on;
     else if (m?.t === 'extResult') {
       extBusy = false;
@@ -56,7 +63,7 @@
   // As páginas do jogo são janelas nativas por cima destas vagas: o app precisa saber onde cada uma está.
   function report() {
     if (!config) return;
-    const slots = panel ? [] : shown.map((i) => {
+    const slots = panel || touring ? [] : shown.map((i) => {
       const r = bodies[i]?.getBoundingClientRect();
       return r && r.width > 0 ? { i, x: r.left, y: r.top, w: r.width, h: r.height } : null;
     }).filter(Boolean);
@@ -65,7 +72,7 @@
   // Observa cada vaga, não só a janela: o cabeçalho quebra linha quando os dados chegam e a vaga encolhe sem a janela mudar.
   const ro = new ResizeObserver(() => requestAnimationFrame(report));
   $effect(() => {
-    void config?.Layout, config?.Focus, panel, shown.length;
+    void config?.Layout, config?.Focus, panel, touring, shown.length;
     tick().then(() => {
       for (const i of shown) if (bodies[i]) ro.observe(bodies[i]);
       requestAnimationFrame(report);
@@ -127,6 +134,62 @@
     save(draft);
     panel = null;
   }
+
+  // O tour: cada passo destaca um [data-tour] da tela (sem alvo na tela, o balão fica no meio); com `cfg`, abre a Config
+  // naquela aba. Durante o tour as páginas do jogo saem da frente, como nos painéis.
+  const TOUR = [
+    { title: 'Bem-vindo ao PokeDeck!', text: 'Um tour rápido pelo que tem na tela. Dá para pular agora e rever quando quiser em Config › Rever tour.' },
+    { at: 'layout', title: 'Arrumação', text: 'Grade ou colunas: como as contas ficam lado a lado na janela.' },
+    { at: 'modes', title: 'Modos do jogo', text: 'ULTRA, Economia e Mudo para todas as contas ligadas de uma vez. Cada conta também tem os seus em Config.' },
+    { at: 'power', title: 'Ligar e desligar', text: 'Liga ou desliga todas as contas. As desligadas aparecem à direita da barra: um clique liga só aquela.' },
+    { at: 'pane', title: 'Cada conta', text: 'O quadradinho mostra o estado (verde: no jogo). Ao lado, os bônus da Twitch (T) e da Kick (K) ativos e quanto falta.' },
+    { at: 'pane-tools', title: 'Botões da conta', text: 'Lives e resgates (T/K e 🎁, quando a conta assiste às lives), voto no IdleHub, recompra automática, recarregar, ampliar e desligar. Passe o mouse em cada um para ver a dica.' },
+    { at: 'checklives', title: 'Lives', text: 'Confere agora quem está ao vivo. O app também confere sozinho de tempos em tempos.' },
+    { at: 'log', title: 'Registro', text: 'Tudo o que aconteceu: resgates, baús, recusas, a guarda e o log geral do app.' },
+    { at: 'config', title: 'Config', text: 'Aqui fica tudo o que dá para ajustar. Vamos dar uma olhada por dentro.' },
+    { cfg: 0, at: 'cfg-tabs', title: 'Abas da Config', text: 'Uma aba para cada conta, mais Lives, Tempos e desempenho e Extensões. Nada vale até clicar em Salvar; Cancelar descarta.' },
+    { cfg: 0, at: 'cfg-account', title: 'A conta', text: 'Nome, ligada/desligada, os modos do jogo, menos animações, mudo e o zoom só desta conta.' },
+    { cfg: 0, at: 'cfg-restock', title: 'Recompra', text: 'Quando a pokebola, as poções ou os revives ficarem abaixo do número, a conta compra a quantidade escolhida, sem gastar abaixo do ouro mínimo. "Aplicar a todas" copia estas regras para as outras contas.' },
+    { cfg: 'lives', at: 'cfg-channels', title: 'Canais das lives', text: 'Um canal por linha, em ordem de prioridade: o app abre os primeiros que estiverem no ar, até o número de lives por conta. Na Twitch também dá para pegar o baú de bônus sozinho.' },
+    { cfg: 'lives', at: 'cfg-per-account', title: 'Lives por conta', text: 'Quais contas assistem às lives, qual bônus cada uma resgata com os pontos da Kick e da Twitch, e a guarda (resgata perto de o bônus vencer). Vincule a Twitch e a Kick dentro do jogo em cada conta que resgata.' },
+    { cfg: 'lives', at: 'cfg-block', title: 'Horário de bloqueio', text: 'Se o buff de uma conta já passa deste horário, ela não resgata e desliga o 🎁 daquele site. Bom para não gastar pontos de madrugada.' },
+    { cfg: 'timing', at: 'cfg-timing', title: 'Tempos e desempenho', text: 'De quanto em quanto tempo cada coisa acontece (sempre com uma variação, para não ter ritmo exato), e o FPS e a animação dos sprites para deixar o PC mais leve.' },
+    { cfg: 'ext', at: 'cfg-ext', title: 'Extensões', text: 'Cole o link de uma extensão da Chrome Web Store, escolha as contas e instale. Cada conta tem as suas.' },
+    { cfg: 0, at: 'cfg-retour', title: 'Pronto!', text: 'Quando quiser relembrar algo, é só clicar em Rever tour aqui na Config.' },
+  ];
+  let touring = $state(false);
+  let tourStep = $state(0);
+  let tourRect = $state(null);
+  function startTour() {
+    tourStep = 0;
+    touring = true;
+    placeTour();
+  }
+  function endTour() {
+    touring = false;
+    if (!config.TourDone) save({ ...$state.snapshot(config), TourDone: true });
+  }
+  function tourGo(d) {
+    const next = tourStep + d;
+    if (next >= TOUR.length) return endTour();
+    tourStep = Math.max(0, next);
+    placeTour();
+  }
+  async function placeTour() {
+    const { cfg, at } = TOUR[tourStep];
+    if (cfg === undefined) {
+      if (panel === 'config') panel = null;
+    } else {
+      if (panel !== 'config') openConfig();
+      tab = cfg;
+    }
+    await tick();
+    const el = at && document.querySelector(`[data-tour="${at}"]`);
+    el?.scrollIntoView({ block: 'nearest' });
+    const r = el?.getBoundingClientRect();
+    tourRect = r?.width ? { x: r.left - 4, y: r.top - 4, w: r.width + 8, h: r.height + 8 } : null;
+  }
+  window.addEventListener('resize', () => touring && placeTour());
 
   // A dica dos botões T/K: as lives assistidas, se o aviso de assistindo passou (✓ hora) e o saldo/custo do bônus.
   function livesTip(site, logged, lives, notes) {
@@ -239,21 +302,21 @@
       PokeDeck
     </strong>
     {#if config}
-      <div class="seg" role="group" aria-label="Arrumação">
+      <div class="seg" role="group" aria-label="Arrumação" data-tour="layout">
         <button class:on={config.Layout === 'grid'} onclick={() => setLayout('grid')}>{@render icon('grid', 13)}Grade</button>
         <button class:on={config.Layout === 'cols'} onclick={() => setLayout('cols')}>{@render icon('cols', 13)}Colunas</button>
       </div>
       <span class="sep"></span>
-      <div class="group">
+      <div class="group" data-tour="modes">
         <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Ultra)} onclick={() => toggleAll('Ultra')} title="Modo ULTRA Economia do jogo (recarrega as contas)">{@render icon('bolt')}ULTRA</button>
         <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Economy)} onclick={() => toggleAll('Economy')} title="Modo Economia do jogo (recarrega as contas)">{@render icon('battery')}Economia</button>
         <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Muted)} onclick={() => toggleAll('Muted')}>{@render icon('mute')}Mudo</button>
       </div>
       <span class="sep"></span>
       {#if off.length}
-        <button onclick={() => save({ ...$state.snapshot(config), Accounts: config.Accounts.map((a) => ({ ...$state.snapshot(a), On: true })) })}>{@render icon('power')}Ligar todas</button>
+        <button data-tour="power" onclick={() => save({ ...$state.snapshot(config), Accounts: config.Accounts.map((a) => ({ ...$state.snapshot(a), On: true })) })}>{@render icon('power')}Ligar todas</button>
       {:else}
-        <button onclick={() => save({ ...$state.snapshot(config), Accounts: config.Accounts.map((a) => ({ ...$state.snapshot(a), On: false })) })}>{@render icon('power')}Desligar todas</button>
+        <button data-tour="power" onclick={() => save({ ...$state.snapshot(config), Accounts: config.Accounts.map((a) => ({ ...$state.snapshot(a), On: false })) })}>{@render icon('power')}Desligar todas</button>
       {/if}
       <span class="spacer"></span>
       {#if off.length}
@@ -269,9 +332,9 @@
           {#if status.update.busy}{@render icon('down')}Baixando {status.update.pct}%{:else}{@render icon('up')}Atualizar para {status.update.version}{/if}</button>
       {/if}
       <button class:on={fullscreen} onclick={() => send({ t: 'fullscreen' })} title="Tela cheia (F11)">{@render icon('full')}Tela cheia</button>
-      <button onclick={() => send({ t: 'checkLives' })} title="Conferir agora quem está ao vivo">{@render icon('refresh')}Lives</button>
-      <button class:on={panel === 'log'} onclick={() => (panel = panel === 'log' ? null : 'log')}>{@render icon('list')}Registro</button>
-      <button class:on={panel === 'config'} onclick={() => (panel === 'config' ? (panel = null) : openConfig())}>{@render icon('gear')}Config</button>
+      <button data-tour="checklives" onclick={() => send({ t: 'checkLives' })} title="Conferir agora quem está ao vivo">{@render icon('refresh')}Lives</button>
+      <button data-tour="log" class:on={panel === 'log'} onclick={() => (panel = panel === 'log' ? null : 'log')}>{@render icon('list')}Registro</button>
+      <button data-tour="config" class:on={panel === 'config'} onclick={() => (panel === 'config' ? (panel = null) : openConfig())}>{@render icon('gear')}Config</button>
     {/if}
   </header>
 
@@ -282,7 +345,7 @@
         {@const c = config.Accounts[i]}
         {@const ph = PHASE[a.phase] ?? PHASE.loading}
         <section class="pane">
-          <div class="head">
+          <div class="head" data-tour={i === shown[0] ? 'pane' : null}>
             <span class="dot {ph[1]}" title={ph[0]}></span>
             <strong>{c.Name}</strong>
             {#each [['tw', 'T', 'Twitch', a.bonus?.twitch], ['kk', 'K', 'Kick', a.bonus?.kick]] as [cls, tag, site, map]}
@@ -291,6 +354,7 @@
               {/if}
             {/each}
             <span class="spacer"></span>
+            <span class="tools" data-tour={i === shown[0] ? 'pane-tools' : null}>
             {#if c.Lives}
               <span class="lives">
                 <button class="mini tw" class:dim={!a.lives?.twitchLogged} onclick={() => send({ t: 'login', i, site: 'twitch' })}
@@ -315,9 +379,10 @@
             <button class="mini" onclick={() => send({ t: 'reload', i })} title="Recarregar">{@render icon('refresh', 13)}</button>
             <button class="mini" onclick={() => (config.Layout === 'focus' ? setLayout('grid') : setLayout('focus', i))} title="Ampliar / voltar">{@render icon('expand', 13)}</button>
             <button class="mini stop" onclick={() => setAccount(i, { On: false })} title="Desligar esta conta">{@render icon('power', 13)}</button>
+            </span>
           </div>
           <div class="body" bind:this={bodies[i]}>
-            {#if panel}<div class="cover">{ph[0]}</div>{/if}
+            {#if panel || touring}<div class="cover">{ph[0]}</div>{/if}
           </div>
         </section>
       {:else}
@@ -381,15 +446,37 @@
     </div>
   {/if}
 
+  {#if touring}
+    {@const st = TOUR[tourStep]}
+    {@const below = tourRect && tourRect.y + tourRect.h + 200 < window.innerHeight}
+    {@const above = tourRect && tourRect.y > 220}
+    <div class="tour" role="dialog" aria-modal="true" aria-labelledby="tour-title">
+      <div class="hole" style={tourRect ? `left:${tourRect.x}px;top:${tourRect.y}px;width:${tourRect.w}px;height:${tourRect.h}px` : 'left:50%;top:50%;width:0;height:0'}></div>
+      <div class="tip" style={!tourRect ? 'left:50%;top:50%;transform:translate(-50%,-50%)'
+        : `left:${Math.min(Math.max(8, tourRect.x), window.innerWidth - 368)}px;` + (below ? `top:${tourRect.y + tourRect.h + 10}px` : above ? `bottom:${window.innerHeight - tourRect.y + 10}px` : 'bottom:16px')}>
+        <h3 id="tour-title">{st.title}</h3>
+        <p>{st.text}</p>
+        <div class="row">
+          <span class="muted small">{tourStep + 1} de {TOUR.length}</span>
+          <span class="spacer"></span>
+          <button onclick={endTour}>Pular tour</button>
+          {#if tourStep > 0}<button onclick={() => tourGo(-1)}>Anterior</button>{/if}
+          <button class="on" onclick={() => tourGo(1)}>{tourStep === TOUR.length - 1 ? 'Concluir' : 'Próximo'}</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   {#if panel === 'config' && draft}
     <div class="overlay">
       <div class="sheet">
-        <nav class="tabs">
+        <nav class="tabs" data-tour="cfg-tabs">
           {#each draft.Accounts as a, i}<button class="tab" class:on={tab === i} onclick={() => (tab = i)}>{a.Name}</button>{/each}
           <button class="tab" class:on={tab === 'lives'} onclick={() => (tab = 'lives')}>Lives</button>
           <button class="tab" class:on={tab === 'timing'} onclick={() => (tab = 'timing')}>Tempos e desempenho</button>
           <button class="tab" class:on={tab === 'ext'} onclick={() => (tab = 'ext')}>Extensões</button>
           <span class="spacer"></span>
+          <button data-tour="cfg-retour" onclick={startTour} title="Mostra de novo o tour pelo app (fecha a Config sem salvar)">Rever tour</button>
           <button onclick={() => (panel = null)}>Cancelar</button>
           <button class="on" onclick={saveConfig}>Salvar</button>
         </nav>
@@ -398,6 +485,7 @@
           {@const a = draft.Accounts[tab]}
           {@const s = acc(tab)}
           <div class="form">
+            <div class="form" data-tour="cfg-account">
             <h3>Conta</h3>
             <label>Nome <input bind:value={a.Name} /></label>
             <label><input type="checkbox" bind:checked={a.On} /> Ligada</label>
@@ -406,6 +494,8 @@
             <label><input type="checkbox" bind:checked={a.ReduceMotion} /> Menos animações</label>
             <label><input type="checkbox" bind:checked={a.Muted} /> Mudo</label>
             <label>Zoom <input type="number" step="0.1" min="0.5" max="1.5" bind:value={a.Zoom} /></label>
+            </div>
+            <div class="form" data-tour="cfg-restock">
 
             <h3>Recompra</h3>
             <button onclick={() => copyRestock(tab)} title="Copia estas regras de recompra (inclusive ligada/desligada) para as outras contas; salve para valer">
@@ -446,6 +536,7 @@
                 </tr>
               </tbody>
             </table>
+            </div>
 
             <p class="muted">Lives, resgates e guarda desta conta ficam na aba <strong>Lives</strong>.</p>
           </div>
@@ -453,7 +544,7 @@
           {@const lines = (t) => t.split(/[\s,]+/).filter(Boolean)}
           {@const liveNow = (map) => Object.entries(map ?? {}).filter(([, v]) => v).map(([k]) => k)}
           <p class="muted">Um canal por linha, na ordem de prioridade. O app abre as primeiras que estiverem no ar.</p>
-          <div class="cols2">
+          <div class="cols2" data-tour="cfg-channels">
             <div class="card">
               <div class="card-head"><span class="pill tw">Twitch</span> canais, em ordem de prioridade <span class="spacer"></span><span class="muted">{lines(twitchText).length} canais</span></div>
               <textarea rows="12" bind:value={twitchText}></textarea>
@@ -477,7 +568,7 @@
               <span class="muted small">No ar agora: {liveNow(status.kickLive).join(', ') || 'nenhum'}</span>
             </div>
           </div>
-          <div class="card">
+          <div class="card" data-tour="cfg-per-account">
             <div class="card-head"><strong>Por conta</strong><span class="spacer"></span><span class="muted">vincule a Kick e a Twitch no jogo em cada conta que resgata</span></div>
             <table class="grid">
               <thead>
@@ -501,7 +592,7 @@
                 {/each}
               </tbody>
             </table>
-            <div class="row">
+            <div class="row" data-tour="cfg-block">
               <label>Horário de bloqueio do resgate (todas as contas)
                 <input class="hhmm" bind:value={draft.RedeemBlockAt} placeholder="ex.: 22:00" maxlength="5"
                   class:bad={draft.RedeemBlockAt && !hhmm(draft.RedeemBlockAt)} title="Horário no formato HH:mm (ex.: 22:00). Vazio: sem bloqueio." /></label>
@@ -510,7 +601,7 @@
           </div>
           <p class="muted small">As lives abertas são reconferidas ao salvar.</p>
         {:else if tab === 'ext'}
-          <div class="form">
+          <div class="form" data-tour="cfg-ext">
             <p class="muted">Cada conta tem as próprias extensões. Cole o link da Chrome Web Store, marque as contas e instale. A conta recarrega para a extensão entrar.</p>
             <label class="wide">Link <input class="grow" bind:value={extLink} placeholder="https://chromewebstore.google.com/detail/..." /></label>
             <div class="row">
@@ -531,7 +622,7 @@
             {/each}
           </div>
         {:else}
-          <div class="form">
+          <div class="form" data-tour="cfg-timing">
             <p class="muted">Todo intervalo varia ± a variação, para nada sair em ritmo exato.</p>
             <label>Variação (0–0,5) <input type="number" step="0.05" min="0" max="0.5" bind:value={draft.Timing.JitterPct} /></label>
             <label>Conferir quem está ao vivo (s) <input type="number" min="60" bind:value={draft.Timing.LiveCheckSec} /></label>
@@ -662,4 +753,11 @@
   .bad { color: var(--bad-text); }
   input.bad { border-color: var(--bad); }
   .log { font: 12px/1.45 Consolas, monospace; white-space: pre-wrap; margin: 0; }
+  .tools { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  /* O tour: o "buraco" escurece o resto com uma sombra enorme; a camada inteira segura os cliques. */
+  .tour { position: fixed; inset: 0; z-index: 10; }
+  .hole { position: absolute; border-radius: 5px; box-shadow: 0 0 0 9999px rgba(20, 10, 15, 0.82); outline: 2px solid var(--accent); transition: all 0.2s; }
+  .tip { position: absolute; width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 12px 16px 14px; }
+  .tip h3 { margin: 0 0 6px; }
+  .tip p { margin: 0 0 12px; line-height: 1.5; }
 </style>

@@ -234,6 +234,19 @@ public class ParseTests
         Assert.Equal(Config.MaxAccounts, c.Accounts.Length);
         Assert.Equal(new[] { "rodil" }, c.TwitchChannels);
     }
+
+    [Fact]
+    public void Tour_only_on_first_run()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"pokedeck-{Guid.NewGuid():N}.json");
+        try
+        {
+            Assert.False(Config.Load(path).TourDone); // sem arquivo: primeiro acesso
+            File.WriteAllText(path, """{"Layout":"grid"}"""); // config de versão antiga, sem o campo
+            Assert.True(Config.Load(path).TourDone);
+        }
+        finally { File.Delete(path); }
+    }
 }
 
 public class IdleHubTests
