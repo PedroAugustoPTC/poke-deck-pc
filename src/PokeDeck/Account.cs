@@ -197,9 +197,6 @@ internal sealed class Account : IDisposable
             case "refused":
                 _restock.Refused(m.GetProperty("msg").GetString() ?? "");
                 break;
-            case "echo":
-                _host.Echo(Index, m.GetProperty("msg").GetString() ?? "");
-                break;
         }
     }
 

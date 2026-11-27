@@ -284,23 +284,6 @@ public class IdleHubTests
     }
 }
 
-public class EchoTests
-{
-    [Theory]
-    [InlineData("""{"t":"centro.curar"}""", true)]
-    [InlineData("""{"t":"hunt.select","slug":"rota-1"}""", true)]
-    [InlineData("""{"t":"shop.buy","kind":"ball","id":1,"qty":10}""", true)]
-    [InlineData("""{"t":"ping"}""", false)]
-    [InlineData("""{"t":"chat.send","canal":"mundo","texto":"oi"}""", false)]
-    [InlineData("""{"t":"amigo.aceitar","de":"x"}""", false)]
-    [InlineData("""{"t":"team.active","pokemonId":123}""", false)]
-    [InlineData("""{"t":"pokemon.evoluir","pokemonId":1,"alvoId":2}""", false)]
-    [InlineData("""not json""", false)]
-    [InlineData("""[1]""", false)]
-    public void Repeats_only_actions_valid_in_any_account(string message, bool repeat) =>
-        Assert.Equal(repeat, Echo.ShouldRepeat(message));
-}
-
 public class RedeemBlockTests
 {
     private static readonly DateTime Noon = new(2026, 11, 26, 12, 0, 0);

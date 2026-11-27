@@ -62,14 +62,18 @@
     }).filter(Boolean);
     send({ t: 'layout', dpr: window.devicePixelRatio, slots });
   }
+  // Observa cada vaga, não só a janela: o cabeçalho quebra linha quando os dados chegam e a vaga encolhe sem a janela mudar.
+  const ro = new ResizeObserver(() => requestAnimationFrame(report));
   $effect(() => {
     void config?.Layout, config?.Focus, panel, shown.length;
-    tick().then(() => requestAnimationFrame(report));
+    tick().then(() => {
+      for (const i of shown) if (bodies[i]) ro.observe(bodies[i]);
+      requestAnimationFrame(report);
+    });
   });
 
   onMount(() => {
     send({ t: 'ready' });
-    const ro = new ResizeObserver(() => requestAnimationFrame(report));
     ro.observe(document.body);
     return () => ro.disconnect();
   });
@@ -200,7 +204,6 @@
     bolt: '<path d="M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z"/>',
     battery: '<rect x="1.5" y="5" width="11.5" height="6" rx="1"/><path d="M14.5 7v2M4.5 7.5v1M7 7.5v1"/>',
     mute: '<path d="M2.5 6h2.5L8.5 3v10L5 10H2.5z"/><path d="m11 6 4 4M15 6l-4 4"/>',
-    swap: '<path d="M2 5h11l-2.5-2.5"/><path d="M14 11H3l2.5 2.5"/>',
     power: '<path d="M8 1.8v5.4"/><path d="M4.6 4.2a5 5 0 1 0 6.8 0"/>',
     full: '<path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/>',
     refresh: '<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.5 2v3h-3"/>',
@@ -244,8 +247,6 @@
         <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Ultra)} onclick={() => toggleAll('Ultra')} title="Modo ULTRA Economia do jogo (recarrega as contas)">{@render icon('bolt')}ULTRA</button>
         <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Economy)} onclick={() => toggleAll('Economy')} title="Modo Economia do jogo (recarrega as contas)">{@render icon('battery')}Economia</button>
         <button class:on={config.Accounts.filter((a) => a.On).every((a) => a.Muted)} onclick={() => toggleAll('Muted')}>{@render icon('mute')}Mudo</button>
-        <button class:on={status.echo} onclick={() => send({ t: 'echo', on: !status.echo })}
-          title="Eco: o que você faz no jogo de uma conta se repete nas outras (a mesma ação, pelo jogo de cada uma). Chat, mensagens e ações num pokémon específico não se repetem.">{@render icon('swap')}Eco{status.echo ? ' ligado' : ''}</button>
       </div>
       <span class="sep"></span>
       {#if off.length}
@@ -283,7 +284,6 @@
           <div class="head">
             <span class="dot {ph[1]}" title={ph[0]}></span>
             <strong>{c.Name}</strong>
-            <span class="chip gold" title="Ouro"><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="#e2a93f" stroke="#7d5313" stroke-width="1.5" /><path d="M8 5v6" stroke="#7d5313" stroke-width="1.5" /></svg>{fmt(a.gold)}</span>
             {#each [['tw', 'T', 'Twitch', a.bonus?.twitch], ['kk', 'K', 'Kick', a.bonus?.kick]] as [cls, tag, site, map]}
               {#if map}
                 <span class="chip {cls}" title="Bônus da {site} ativos no jogo (tempo que falta)">{tag} {buffs(map).map(([k, sec]) => `${BUFF[k] ?? k} ${left(sec)}`).join(' · ') || '—'}</span>
@@ -588,7 +588,6 @@
   .dot.warn { background: var(--warn); }
   .dot.bad { background: var(--bad); }
   .chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px; border-radius: 3px; background: var(--well); color: var(--muted); white-space: nowrap; }
-  .chip.gold { color: var(--gold-light); font-weight: 600; font-variant-numeric: tabular-nums; }
   .chip.active { color: var(--text); }
   .chip.tw, .mini.tw { color: var(--twitch); }
   .chip.kk, .mini.kk { color: var(--kick); }

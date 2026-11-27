@@ -22,7 +22,6 @@ internal sealed class MainForm : Form
     private WebView2? _ui;
     private Dictionary<string, bool?> _twitchLive = new(), _kickLive = new();
     private bool _checking;
-    private bool _echo; // não fica salvo: o Eco sempre abre desligado
     private readonly Form?[] _voteWindows = new Form?[Config.MaxAccounts];
     private Release? _update;
     private bool _updating;
@@ -269,7 +268,6 @@ internal sealed class MainForm : Form
         redeems = Log.RedeemLines(),
         twitchLive = _twitchLive,
         kickLive = _kickLive,
-        echo = _echo,
         update = _update is null ? null : new
         {
             version = _update.Version.ToString(3),
@@ -308,10 +306,6 @@ internal sealed class MainForm : Form
                     break;
                 case "vote":
                     OpenVote(m.GetProperty("i").GetInt32());
-                    break;
-                case "echo":
-                    _echo = m.GetProperty("on").GetBoolean();
-                    Log.Write(null, _echo ? "Eco ligado" : "Eco desligado");
                     break;
                 case "updateNow":
                     await UpdateNowAsync();
@@ -426,24 +420,6 @@ internal sealed class MainForm : Form
         {
             _checking = false;
         }
-    }
-
-    // ---------------- eco ----------------
-
-    /// <summary>
-    /// Eco: a mensagem que o jogo de uma conta mandou por um clique seu vai, no socket do jogo, às outras contas no
-    /// jogo, cada uma com um atraso próprio (nada sai junto no mesmo instante).
-    /// </summary>
-    public void Echo(int from, string message)
-    {
-        if (!_echo || !Core.Echo.ShouldRepeat(message))
-            return;
-        var targets = _accounts.Where(a => a.Index != from && a.Phase == "game").ToList();
-        foreach (var a in targets)
-            _ = Task.Delay(Jitter.Between(TimeSpan.FromMilliseconds(150), TimeSpan.FromMilliseconds(900)))
-                .ContinueWith(_ => BeginInvoke(() => a.Send(message)));
-        if (targets.Count > 0)
-            Log.Write(from, $"eco: {message[..Math.Min(80, message.Length)]} → {targets.Count} conta(s)");
     }
 
     // ---------------- voto no IdleHub ----------------
