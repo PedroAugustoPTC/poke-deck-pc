@@ -137,6 +137,8 @@
 ${v.votes} votos · ${missing === 1 ? 'falta 1 voto' : `faltam ${missing} votos`} para o próximo 💎 (${v.perPair} 💎 a cada ${v.perReward} votos)`;
   }
 
+  const BUFF = { xp: 'XP', captura: 'Captura', shiny: 'Shiny' };
+  const buffs = (map) => Object.entries(map ?? {}).filter(([, sec]) => sec > 0);
   const fmt = (n) => (n == null ? '—' : Math.round(n).toLocaleString('pt-BR'));
   const left = (s) => (!s ? '—' : s >= 3600 ? `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}` : `${Math.max(1, Math.floor(s / 60))}min`);
   const PHASE = { game: ['no jogo', 'ok'], login: ['tela de login', 'warn'], loading: ['carregando…', 'muted'], failed: ['não carregou', 'bad'], elsewhere: ['aberta em outro lugar', 'bad'], off: ['desligada', 'muted'] };
@@ -191,15 +193,12 @@ ${v.votes} votos · ${missing === 1 ? 'falta 1 voto' : `faltam ${missing} votos`
           <div class="head">
             <span class="dot {ph[1]}" title={ph[0]}></span>
             <strong>{c.Name}</strong>
-            {#if a.nick}<span class="muted">{a.nick}{a.vip ? ' · VIP' : ''}</span>{/if}
             <span class="chip gold" title="Ouro">💰 {fmt(a.gold)}</span>
-            {#if a.stock}
-              <span class="chip" class:active={c.Restock.On} title={c.Restock.On ? `Recompra ligada${a.restock?.paused ? ' (pausada)' : ''}` : 'Recompra desligada'}>
-                🛒 ⚪{fmt(a.stock.balls)} 🧪{fmt(a.stock.potions)} 💊{fmt(a.stock.revives)}
-              </span>
-            {/if}
-            {#if a.bonus?.twitch && c.RedeemTwitch}<span class="chip tw" title="Bônus da Twitch que falta">T {left(a.bonus.twitch[c.RedeemTwitch])}</span>{/if}
-            {#if a.bonus?.kick && c.RedeemKick}<span class="chip kk" title="Bônus da Kick que falta">K {left(a.bonus.kick[c.RedeemKick])}</span>{/if}
+            {#each [['tw', 'T', 'Twitch', a.bonus?.twitch], ['kk', 'K', 'Kick', a.bonus?.kick]] as [cls, tag, site, map]}
+              {#if map}
+                <span class="chip {cls}" title="Bônus da {site} ativos no jogo (tempo que falta)">{tag} {buffs(map).map(([k, sec]) => `${BUFF[k] ?? k} ${left(sec)}`).join(' · ') || '—'}</span>
+              {/if}
+            {/each}
             <span class="spacer"></span>
             {#if c.Lives}
               <span class="lives">
@@ -216,7 +215,7 @@ ${v.votes} votos · ${missing === 1 ? 'falta 1 voto' : `faltam ${missing} votos`
               <button class="mini" class:vote={a.vote.ready} onclick={() => send({ t: 'vote', i })} title={voteTip(a.vote)}>
                 🗳 {a.vote.voted ? '✓ Votou' : a.vote.ready ? 'Votar' : left(a.vote.left)}</button>
             {/if}
-            <button class="mini" onclick={() => setAccount(i, { Restock: { ...c.Restock, On: !c.Restock.On } })} class:on={c.Restock.On} title="Recompra">🛒</button>
+            <button class="mini" onclick={() => setAccount(i, { Restock: { ...c.Restock, On: !c.Restock.On } })} class:on={c.Restock.On} title={c.Restock.On ? `Recompra ligada${a.restock?.paused ? ' (pausada)' : ''}` : 'Recompra desligada'}>🛒</button>
             <button class="mini" onclick={() => send({ t: 'reload', i })} title="Recarregar">⟳</button>
             <button class="mini" onclick={() => (config.Layout === 'focus' ? setLayout('grid') : setLayout('focus', i))} title="Ampliar / voltar">⤢</button>
             <button class="mini" onclick={() => setAccount(i, { On: false })} title="Desligar esta conta">⏻</button>

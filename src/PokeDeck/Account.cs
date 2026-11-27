@@ -600,7 +600,6 @@ internal sealed class Account : IDisposable
         var s = State;
         var now = DateTime.Now;
         var pots = s?.Shop.Where(i => i.Category == "heal").ToList() ?? new();
-        var revs = s?.Shop.Where(i => i.Category == "revive").ToList() ?? new();
         object Lives(IEnumerable<string> open, Func<string, string> watch, Points pts) =>
             open.Select(c => new { channel = c, watch = watch(c), points = pts.Channels.TryGetValue(c, out var x) ? x.Text : "" }).ToList();
         return new
@@ -609,15 +608,7 @@ internal sealed class Account : IDisposable
             phase = Phase,
             active = Active,
             extensions = Extensions,
-            nick = s?.Nick,
             gold = s?.Gold,
-            vip = s?.Vip ?? false,
-            stock = s is null ? null : new
-            {
-                balls = s.BallsOf(Cfg.Restock.Balls.Id),
-                potions = pots.Sum(p => s.Have(p.Id)),
-                revives = revs.Sum(r => s.Have(r.Id)),
-            },
             restock = new { paused = _restock.Paused, potion = _restock.PotionPick },
             ballCatalog = s?.BallCatalog.Where(b => b.Buyable).Select(b => new { id = b.Id, name = b.Name, price = b.Price }),
             potionList = pots.Select(p => new { id = p.Id, name = p.Name, price = p.Price }),
