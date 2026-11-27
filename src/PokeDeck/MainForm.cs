@@ -24,6 +24,10 @@ internal sealed class MainForm : Form
     private bool _checking;
     private bool _echo; // não fica salvo: o Eco sempre abre desligado
     private readonly Form?[] _voteWindows = new Form?[Config.MaxAccounts];
+    private Release? _update;
+    private bool _updating;
+    private int _updatePct;
+    private string? _updateError;
 
     public MainForm()
     {
@@ -86,6 +90,106 @@ internal sealed class MainForm : Form
         timer.Start();
         _ = Jitter.Every(() => TimeSpan.FromSeconds(Config.Timing.LiveCheckSec), () => Config.Timing.JitterPct, CheckLivesAsync, _stop.Token,
             TimeSpan.FromSeconds(15));
+        _ = CheckUpdateAsync();
+    }
+
+    // ---------------- atualização ----------------
+
+    private static HttpClient GitHub(TimeSpan timeout)
+    {
+        var http = new HttpClient { Timeout = timeout };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("PokeDeck-updater"); // o GitHub exige um User-Agent
+        return http;
+    }
+
+    /// <summary>Ao abrir: a release mais nova do GitHub é mais nova que este exe? Então mostra o botão de atualizar.</summary>
+    private async Task CheckUpdateAsync()
+    {
+        var current = typeof(MainForm).Assembly.GetName().Version;
+        try
+        {
+            await Task.Delay(Jitter.Between(TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(10)), _stop.Token);
+            using var http = GitHub(TimeSpan.FromSeconds(30));
+            http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+            if (Updater.Parse(await http.GetStringAsync(Updater.LatestUrl, _stop.Token)) is Release r && Updater.IsNewer(current, r))
+            {
+                _update = r;
+                Log.Write(null, $"nova versão disponível: {r.Tag}");
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Log.Write(null, "não consegui conferir se há versão nova: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Baixa o exe da release, confere o SHA-256, troca o exe atual (renomeado para .old.exe, que o próximo início
+    /// apaga) e abre o novo, que espera este fechar.
+    /// </summary>
+    private async Task UpdateNowAsync()
+    {
+        if (_update is not Release r || _updating)
+            return;
+        (_updating, _updatePct, _updateError) = (true, 0, null);
+        var exe = Environment.ProcessPath!;
+        var fresh = exe + ".new";
+        try
+        {
+            using (var http = GitHub(TimeSpan.FromMinutes(15)))
+            using (var response = await http.GetAsync(r.ExeUrl, HttpCompletionOption.ResponseHeadersRead, _stop.Token))
+            {
+                response.EnsureSuccessStatusCode();
+                long total = response.Content.Headers.ContentLength ?? 0, done = 0;
+                await using var source = await response.Content.ReadAsStreamAsync(_stop.Token);
+                await using var file = File.Create(fresh);
+                var buffer = new byte[1 << 16];
+                for (int n; (n = await source.ReadAsync(buffer, _stop.Token)) > 0;)
+                {
+                    await file.WriteAsync(buffer.AsMemory(0, n), _stop.Token);
+                    done += n;
+                    _updatePct = total > 0 ? (int)(done * 100 / total) : 0;
+                }
+            }
+            string hash;
+            await using (var file = File.OpenRead(fresh))
+                hash = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(file, _stop.Token));
+            if (!hash.Equals(r.Sha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("o arquivo baixado não confere com o da release (SHA-256 diferente)");
+            File.Delete(Program.OldExe);
+            File.Move(exe, Program.OldExe);
+            try
+            {
+                File.Move(fresh, exe);
+            }
+            catch
+            {
+                File.Move(Program.OldExe, exe); // volta o exe atual: nada fica pela metade
+                throw;
+            }
+            Log.Write(null, $"atualizado para {r.Tag}; abrindo a versão nova");
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, "--updated") { UseShellExecute = false });
+            Close();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException
+                                       or TaskCanceledException or System.ComponentModel.Win32Exception)
+        {
+            try
+            {
+                File.Delete(fresh);
+            }
+            catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException)
+            {
+            }
+            _updateError = ex is UnauthorizedAccessException
+                ? "sem permissão para trocar o exe nesta pasta; baixe pela página da release"
+                : ex.Message;
+            Log.Write(null, "atualização falhou: " + ex.Message);
+        }
+        finally
+        {
+            _updating = false;
+        }
     }
 
     /// <summary>A interface sai dos recursos embutidos no exe, em https://app.local/.</summary>
@@ -166,6 +270,14 @@ internal sealed class MainForm : Form
         twitchLive = _twitchLive,
         kickLive = _kickLive,
         echo = _echo,
+        update = _update is null ? null : new
+        {
+            version = _update.Version.ToString(3),
+            notes = _update.Notes.Length > 1500 ? _update.Notes[..1500] + "…" : _update.Notes,
+            busy = _updating,
+            pct = _updatePct,
+            error = _updateError,
+        },
     });
 
     private async void OnUi(string json)
@@ -200,6 +312,13 @@ internal sealed class MainForm : Form
                 case "echo":
                     _echo = m.GetProperty("on").GetBoolean();
                     Log.Write(null, _echo ? "Eco ligado" : "Eco desligado");
+                    break;
+                case "updateNow":
+                    await UpdateNowAsync();
+                    break;
+                case "updatePage":
+                    if (_update is not null) // a página vem da release, já conferida como do próprio repositório
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(_update.Page) { UseShellExecute = true });
                     break;
                 case "checkLives":
                     await CheckLivesAsync();

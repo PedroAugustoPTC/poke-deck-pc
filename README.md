@@ -16,8 +16,10 @@ Twitch/Kick, baú da Twitch, resgate automático do bônus, guarda do bônus e e
    mesmo**. Alguns antivírus também estranham exe novo sem assinatura.
 4. Na barra de cima, **⏻ Ligar todas** (ou ligue uma conta) e entre no jogo em cada uma.
 
-**Atualizar:** feche o app, baixe o exe da release nova e troque pelo antigo. Logins e configurações ficam em
-`%LOCALAPPDATA%\PokeDeck` (não no exe) e continuam. **Não compartilhe essa pasta:** tem os seus logins.
+**Atualizar:** a partir da 0.3.0, o app confere ao abrir se há release nova e mostra **⬆ Atualizar para X** na barra:
+um clique baixa, confere o SHA-256, troca o exe e reabre. Antes da 0.3.0 (ou se a pasta não deixar gravar): feche o
+app, baixe o exe da release nova e troque pelo antigo. Logins e configurações ficam em `%LOCALAPPDATA%\PokeDeck` (não
+no exe) e continuam. **Não compartilhe essa pasta:** tem os seus logins.
 
 ## Compilar (só Docker, nada instalado no PC)
 

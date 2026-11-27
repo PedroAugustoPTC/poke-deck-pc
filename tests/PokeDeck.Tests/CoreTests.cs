@@ -336,3 +336,44 @@ public class RedeemBlockTests
         Assert.Null(c.RedeemBlockAt);
     }
 }
+
+public class UpdaterTests
+{
+    private static string Latest(string tag = "v0.3.0", string url = "https://github.com/PedroAugustoPTC/poke-deck-pc/releases/download/v0.3.0/PokeDeck.exe",
+        string digest = "sha256:39a9548b6c5f1961e40a2477abe7e951b73664ed492d64f646a1ec48bc3aac99") =>
+        JsonSerializer.Serialize(new
+        {
+            tag_name = tag,
+            html_url = "https://github.com/PedroAugustoPTC/poke-deck-pc/releases/tag/" + tag,
+            body = "novidades",
+            assets = new[] { new { name = "PokeDeck.exe", browser_download_url = url, digest } },
+        });
+
+    [Fact]
+    public void Reads_the_latest_release()
+    {
+        var r = Updater.Parse(Latest())!;
+        Assert.Equal(new Version(0, 3, 0), r.Version);
+        Assert.Equal("39a9548b6c5f1961e40a2477abe7e951b73664ed492d64f646a1ec48bc3aac99", r.Sha256);
+        Assert.Equal("novidades", r.Notes);
+    }
+
+    [Fact]
+    public void Refuses_foreign_links_missing_hash_or_bad_tag()
+    {
+        Assert.Null(Updater.Parse(Latest(url: "https://evil.example/PokeDeck.exe")));
+        Assert.Null(Updater.Parse(Latest(digest: "")));
+        Assert.Null(Updater.Parse(Latest(tag: "latest")));
+        Assert.Null(Updater.Parse("not json"));
+    }
+
+    [Fact]
+    public void Only_newer_releases_and_never_the_local_build()
+    {
+        var r = Updater.Parse(Latest())!;
+        Assert.True(Updater.IsNewer(new Version(0, 2, 0, 0), r));
+        Assert.False(Updater.IsNewer(new Version(0, 3, 0, 0), r));
+        Assert.False(Updater.IsNewer(new Version(0, 4, 0, 0), r));
+        Assert.False(Updater.IsNewer(new Version(0, 0, 0, 0), r));
+    }
+}

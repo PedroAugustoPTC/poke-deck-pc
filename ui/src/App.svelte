@@ -7,7 +7,7 @@
   let config = $state(null);
   let status = $state({ accounts: [], log: [], twitchLive: {}, kickLive: {} });
   let panel = $state(null); // null | 'config' | 'log' | 'ask'
-  let ask = $state(null); // a pergunta do painel 'ask': { text, yes, run }
+  let ask = $state(null); // a pergunta do painel 'ask': { text, yes, run, alt?: { label, run } }
   let draft = $state(null);
   let tab = $state(0);
   let twitchText = $state('');
@@ -142,6 +142,19 @@
     return `${head}\n${v.votes} votos · ${missing === 1 ? 'falta 1 voto' : `faltam ${missing} votos`} para o próximo 💎 (${v.perPair} 💎 a cada ${v.perReward} votos)`;
   }
 
+  // Versão nova no GitHub: pergunta antes, porque o app fecha e abre de novo (as contas recarregam).
+  function askUpdate() {
+    const u = status.update;
+    ask = {
+      yes: u.error ? 'Tentar de novo' : 'Atualizar agora',
+      run: () => send({ t: 'updateNow' }),
+      alt: { label: 'Abrir a página da release', run: () => send({ t: 'updatePage' }) },
+      text: `Nova versão do PokeDeck: ${u.version}\n\n${u.notes.trim()}\n\nO PokeDeck baixa a versão nova, fecha e abre de novo sozinho. As contas recarregam; logins e configurações ficam.` +
+        (u.error ? `\n\n⚠ A última tentativa falhou: ${u.error}` : ''),
+    };
+    panel = 'ask';
+  }
+
   // O 🎁 de cada site: liga/desliga o resgate. Religar com o buff já passando do horário de bloqueio pede confirmação.
   function toggleRedeem(i, site) {
     const c = config.Accounts[i];
@@ -214,6 +227,11 @@
       {#each off as i}
         <button onclick={() => setAccount(i, { On: true })} title="Ligar">⏻ {config.Accounts[i].Name}</button>
       {/each}
+      {#if status.update}
+        <button class="on" class:bad={status.update.error} disabled={status.update.busy} onclick={askUpdate}
+          title={status.update.error ? `A atualização falhou: ${status.update.error}` : 'Há uma versão nova do PokeDeck'}>
+          {status.update.busy ? `⬇ Baixando ${status.update.pct}%` : `⬆ Atualizar para ${status.update.version}`}</button>
+      {/if}
       <button class:on={fullscreen} onclick={() => send({ t: 'fullscreen' })} title="Tela cheia (F11)">⛶ Tela cheia</button>
       <button onclick={() => send({ t: 'checkLives' })} title="Conferir agora quem está ao vivo">⟳ Lives</button>
       <button class:on={panel === 'log'} onclick={() => (panel = panel === 'log' ? null : 'log')}>Registro</button>
@@ -276,6 +294,7 @@
       <div class="sheet ask">
         <p>{ask.text}</p>
         <div class="row">
+          {#if ask.alt}<button onclick={() => { ask.alt.run(); panel = null; }}>{ask.alt.label}</button>{/if}
           <span class="spacer"></span>
           <button onclick={() => (panel = null)}>Cancelar</button>
           <button class="on" onclick={() => { ask.run(); panel = null; }}>{ask.yes}</button>
