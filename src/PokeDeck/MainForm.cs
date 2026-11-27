@@ -23,6 +23,7 @@ internal sealed class MainForm : Form
     private Dictionary<string, bool?> _twitchLive = new(), _kickLive = new();
     private bool _checking;
     private readonly Form?[] _voteWindows = new Form?[Config.MaxAccounts];
+    private readonly LivesWindow?[] _livesWindows = new LivesWindow?[Config.MaxAccounts];
     private Release? _update;
     private bool _updating;
     private int _updatePct;
@@ -295,6 +296,9 @@ internal sealed class MainForm : Form
                 case "fullscreen":
                     ToggleFullscreen();
                     break;
+                case "lives":
+                    OpenLives(m.GetProperty("i").GetInt32());
+                    break;
                 case "vote":
                     OpenVote(m.GetProperty("i").GetInt32());
                     break;
@@ -400,12 +404,40 @@ internal sealed class MainForm : Form
             }
             _kickLive = kick;
             foreach (var a in _accounts)
+            {
                 await a.UpdateLivesAsync(_twitchLive, _kickLive);
+                _livesWindows[a.Index]?.SetLives(LivesOf(a));
+            }
         }
         finally
         {
             _checking = false;
         }
+    }
+
+    // ---------------- janela das lives ----------------
+
+    private static List<(string, string)> LivesOf(Account a) =>
+        a.TwitchOpen.Select(c => ("twitch", c)).Concat(a.KickOpen.Select(c => ("kick", c))).ToList();
+
+    /// <summary>As lives que a conta assiste agora (chat lado a lado; "Tela cheia" mostra a live). Uma janela por conta.</summary>
+    private void OpenLives(int index)
+    {
+        if (_env is null || index < 0 || index >= _accounts.Length)
+            return;
+        if (_livesWindows[index] is { IsDisposed: false } open)
+        {
+            if (open.WindowState == FormWindowState.Minimized)
+                open.WindowState = FormWindowState.Normal;
+            open.Activate();
+            return;
+        }
+        var form = new LivesWindow(_env, _accounts[index].Profile, Config.Accounts[index].Name);
+        form.FormClosed += (_, _) => _livesWindows[index] = null;
+        _livesWindows[index] = form;
+        form.SetLives(LivesOf(_accounts[index]));
+        form.Show(this);
+        form.FitColumns();
     }
 
     // ---------------- voto no IdleHub ----------------

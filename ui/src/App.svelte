@@ -217,6 +217,7 @@
     check: '<path d="m3 8.5 3 3 7-7"/>',
     up: '<path d="M8 13.5v-11M3.5 7 8 2.5 12.5 7"/>',
     down: '<path d="M8 2.5v11M3.5 9 8 13.5 12.5 9"/>',
+    play: '<path d="M5 3v10l8-5z"/>',
   };
   // O ícone do app (o mesmo desenho de src/PokeDeck/icon.svg).
   const LOGO = '<rect x="6" y="1" width="9" height="12" fill="#480e1e"/><rect x="7" y="2" width="7" height="10" fill="#722c3f"/><rect x="7" y="2" width="7" height="1" fill="#914850"/>' +
@@ -296,6 +297,8 @@
                   title={livesTip('Twitch', a.lives?.twitchLogged, a.lives?.twitch, [a.lives?.twitchStopped, a.lives?.pubsub])}>T {a.lives?.twitch?.length ?? 0}</button>
                 <button class="mini kk" class:dim={!a.lives?.kickLogged} onclick={() => send({ t: 'login', i, site: 'kick' })}
                   title={livesTip('Kick', a.lives?.kickLogged, a.lives?.kick, [a.lives?.kickStopped])}>K {a.lives?.kick?.length ?? 0}</button>
+                <button class="mini" disabled={!(a.lives?.twitch?.length || a.lives?.kick?.length)} onclick={() => send({ t: 'lives', i })}
+                  title="Ver as lives abertas: o chat de cada uma lado a lado; em Tela cheia, a live mesmo">{@render icon('play', 13)}</button>
                 {#each [['twitch', 'tw', 'T', c.RedeemTwitch, c.RedeemTwitchOn], ['kick', 'kk', 'K', c.RedeemKick, c.RedeemKickOn]] as [site, cls, tag, kind, on]}
                   <button class="mini {cls}" class:on={kind && on} class:dim={!kind || !on} class:off={kind && !on} disabled={!kind} onclick={() => toggleRedeem(i, site)} title={redeemTip(c, site)}>{@render icon('gift', 13)}{tag}</button>
                 {/each}
