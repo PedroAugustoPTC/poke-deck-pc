@@ -244,6 +244,13 @@ internal sealed class MainForm : Form
             a.Game!.Visible = false;
     }
 
+    /// <summary>Uma conta mudou a própria config (o bloqueio desligou um resgate): salva e mostra na interface.</summary>
+    public void SaveConfig()
+    {
+        Config.Save(ConfigPath);
+        Post(new { t = "config", config = Config });
+    }
+
     private async Task SetConfigAsync(Config next)
     {
         var old = Config;

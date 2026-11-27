@@ -6,7 +6,8 @@
 
   let config = $state(null);
   let status = $state({ accounts: [], log: [], twitchLive: {}, kickLive: {} });
-  let panel = $state(null); // null | 'config' | 'log'
+  let panel = $state(null); // null | 'config' | 'log' | 'ask'
+  let ask = $state(null); // a pergunta do painel 'ask': { text, yes, run }
   let draft = $state(null);
   let tab = $state(0);
   let twitchText = $state('');
@@ -18,6 +19,7 @@
   let logAccount = $state(-1);
   let logSite = $state('');
   window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && panel === 'ask') panel = null;
     if (e.key === 'F11') {
       e.preventDefault();
       send({ t: 'fullscreen' });
@@ -110,10 +112,14 @@
     const lines = (t) => t.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
     draft.TwitchChannels = lines(twitchText);
     draft.KickChannels = lines(kickText);
-    for (const a of draft.Accounts) {
+    draft.RedeemBlockAt = hhmm(draft.RedeemBlockAt);
+    draft.Accounts.forEach((a, i) => {
       a.RedeemTwitch ||= null;
       a.RedeemKick ||= null;
-    }
+      // Ligado/desligado é do 🎁 do cabeçalho (e do bloqueio): o painel aberto não desfaz o que mudou nesse meio-tempo.
+      a.RedeemTwitchOn = config.Accounts[i].RedeemTwitchOn;
+      a.RedeemKickOn = config.Accounts[i].RedeemKickOn;
+    });
     save(draft);
     panel = null;
   }
@@ -133,8 +139,40 @@
       : `Esta conta já votou. O próximo voto libera em ${left(v.left)}.`;
     if (!(v.perReward > 0)) return head;
     const missing = Math.max(1, v.perReward - v.inPair);
-    return `${head}
-${v.votes} votos · ${missing === 1 ? 'falta 1 voto' : `faltam ${missing} votos`} para o próximo 💎 (${v.perPair} 💎 a cada ${v.perReward} votos)`;
+    return `${head}\n${v.votes} votos · ${missing === 1 ? 'falta 1 voto' : `faltam ${missing} votos`} para o próximo 💎 (${v.perPair} 💎 a cada ${v.perReward} votos)`;
+  }
+
+  // O 🎁 de cada site: liga/desliga o resgate. Religar com o buff já passando do horário de bloqueio pede confirmação.
+  function toggleRedeem(i, site) {
+    const c = config.Accounts[i];
+    const key = site === 'twitch' ? 'RedeemTwitchOn' : 'RedeemKickOn';
+    const kind = site === 'twitch' ? c.RedeemTwitch : c.RedeemKick;
+    const name = site === 'twitch' ? 'Twitch' : 'Kick';
+    if (!c[key] && acc(i).blockCovered?.[site]) {
+      const sec = acc(i).bonus?.[site]?.[kind] ?? 0;
+      const end = new Date(Date.now() + sec * 1000);
+      const until = end.toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', ...(end.toDateString() === new Date().toDateString() ? {} : { day: '2-digit', month: '2-digit' }) });
+      // Não é confirm(): as páginas do jogo são janelas nativas por cima e cobririam a caixa. Um painel esconde o jogo.
+      ask = { yes: 'Ligar mesmo assim', run: () => setAccount(i, { [key]: true }), text: `${c.Name}: o bônus ${BUFF[kind] ?? kind} da ${name} ainda dura ${left(sec)} (até ${until}), que já passa do horário de bloqueio (${config.RedeemBlockAt}).\n\nLigar o resgate mesmo assim? Ele resgata normalmente e o bloqueio volta a valer depois das ${config.RedeemBlockAt}.` };
+      panel = 'ask';
+      return;
+    }
+    setAccount(i, { [key]: !c[key] });
+  }
+  function redeemTip(c, site) {
+    const kind = site === 'twitch' ? c.RedeemTwitch : c.RedeemKick;
+    const on = site === 'twitch' ? c.RedeemTwitchOn : c.RedeemKickOn;
+    const name = site === 'twitch' ? 'Twitch' : 'Kick';
+    if (!kind) return `Resgate da ${name}: nenhum prêmio escolhido (Config › Lives).`;
+    return `Resgate da ${name} (${BUFF[kind] ?? kind}): ${on ? 'ligado' : 'desligado'}.` +
+      (config.RedeemBlockAt ? `\nHorário de bloqueio: ${config.RedeemBlockAt} (não resgata se o buff já passa dele).` : '') + `\nClique para ` + (on ? 'desligar.' : 'ligar.');
+  }
+
+  // O horário digitado ("22", "22:30", "2230", "22h30", "9:05") como "HH:mm"; vazio ou inválido: null.
+  function hhmm(text) {
+    const m = /^(\d{1,2})(?:[:h]?(\d{2}))?h?$/i.exec(String(text ?? '').trim());
+    if (!m || +m[1] > 23 || +(m[2] ?? 0) > 59) return null;
+    return `${m[1].padStart(2, '0')}:${m[2] ?? '00'}`;
   }
 
   const BUFF = { xp: 'XP', captura: 'Captura', shiny: 'Shiny' };
@@ -206,6 +244,9 @@ ${v.votes} votos · ${missing === 1 ? 'falta 1 voto' : `faltam ${missing} votos`
                   title={livesTip('Twitch', a.lives?.twitchLogged, a.lives?.twitch, [a.lives?.twitchStopped, a.lives?.pubsub])}>T {a.lives?.twitch?.length ?? 0}</button>
                 <button class="mini kk" class:dim={!a.lives?.kickLogged} onclick={() => send({ t: 'login', i, site: 'kick' })}
                   title={livesTip('Kick', a.lives?.kickLogged, a.lives?.kick, [a.lives?.kickStopped])}>K {a.lives?.kick?.length ?? 0}</button>
+                {#each [['twitch', 'tw', 'T', c.RedeemTwitch, c.RedeemTwitchOn], ['kick', 'kk', 'K', c.RedeemKick, c.RedeemKickOn]] as [site, cls, tag, kind, on]}
+                  <button class="mini {cls}" class:dim={!kind || !on} class:off={kind && !on} disabled={!kind} onclick={() => toggleRedeem(i, site)} title={redeemTip(c, site)}>🎁{tag}</button>
+                {/each}
               </span>
             {/if}
             {#each (a.extensions ?? []).filter((e) => e.Enabled && e.Page) as e (e.Id)}
@@ -228,6 +269,19 @@ ${v.votes} votos · ${missing === 1 ? 'falta 1 voto' : `faltam ${missing} votos`
         <div class="empty">Todas as contas desligadas. Ligue uma na barra de cima.</div>
       {/each}
     </main>
+  {/if}
+
+  {#if panel === 'ask' && ask}
+    <div class="overlay">
+      <div class="sheet ask">
+        <p>{ask.text}</p>
+        <div class="row">
+          <span class="spacer"></span>
+          <button onclick={() => (panel = null)}>Cancelar</button>
+          <button class="on" onclick={() => { ask.run(); panel = null; }}>{ask.yes}</button>
+        </div>
+      </div>
+    </div>
   {/if}
 
   {#if panel === 'log'}
@@ -391,6 +445,12 @@ ${v.votes} votos · ${missing === 1 ? 'falta 1 voto' : `faltam ${missing} votos`
                 {/each}
               </tbody>
             </table>
+            <div class="row">
+              <label>Horário de bloqueio do resgate (todas as contas)
+                <input class="hhmm" bind:value={draft.RedeemBlockAt} placeholder="ex.: 22:00" maxlength="5"
+                  class:bad={draft.RedeemBlockAt && !hhmm(draft.RedeemBlockAt)} title="Horário no formato HH:mm (ex.: 22:00). Vazio: sem bloqueio." /></label>
+              <span class="muted small">Antes de resgatar, cada conta confere se o buff dela já passa deste horário (se já passou hoje, vale o de amanhã). Se passa, desliga o 🎁 daquele site nela e registra. Vazio: sem bloqueio.</span>
+            </div>
           </div>
           <p class="muted small">As lives abertas são reconferidas ao salvar.</p>
         {:else if tab === 'ext'}
@@ -467,12 +527,16 @@ ${v.votes} votos · ${missing === 1 ? 'falta 1 voto' : `faltam ${missing} votos`
   .chip.kk, .mini.kk { color: var(--kick); }
   .mini { padding: 1px 7px; }
   .mini.dim { opacity: 0.45; }
+  .mini.off { text-decoration: line-through; }
   .mini.vote { color: var(--accent); font-weight: 600; }
   .lives { display: inline-flex; gap: 4px; }
 
   .overlay { position: fixed; inset: 44px 0 0 0; background: rgba(10, 11, 15, 0.92); display: grid; place-items: center; }
   .sheet { width: min(980px, 96vw); max-height: 92%; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; user-select: text; }
   .tabs { display: flex; gap: 6px; flex-wrap: wrap; position: sticky; top: -14px; background: var(--panel); padding: 6px 0 10px; }
+  .hhmm { width: 80px; }
+  .ask { width: min(520px, 92vw); }
+  .ask p { white-space: pre-line; line-height: 1.5; margin: 4px 0 14px; }
   .form { display: flex; flex-direction: column; gap: 9px; align-items: flex-start; }
   h2, h3 { margin: 8px 0 2px; font-weight: 600; }
   h3 { color: var(--accent); font-size: 13px; }
@@ -504,6 +568,7 @@ ${v.votes} votos · ${missing === 1 ? 'falta 1 voto' : `faltam ${missing} votos`
   .k-recusado, .k-baú-recusado, .k-devolvido { color: var(--bad); }
   .k-gasto-fora { color: var(--warn); }
   .k-guarda { color: var(--accent); }
+  .k-bloqueio { color: var(--warn); }
   .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .wide { width: 100%; }
   .grow { flex: 1; }

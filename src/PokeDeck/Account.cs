@@ -32,6 +32,8 @@ internal sealed class Account : IDisposable
     private string? _twitchToken, _twitchDevice, _twitchUser, _kickToken;
     private bool _busyTwitch, _busyKick;
     private DateTime _voteCheckAt, _votedAt;
+    private readonly Dictionary<string, bool> _redeemSeen = new();
+    private readonly Dictionary<string, DateTime> _blockIgnoredUntil = new();
 
     public Account(int index, MainForm host)
     {
@@ -237,6 +239,18 @@ internal sealed class Account : IDisposable
         Game.ZoomFactor = Cfg.Zoom;
         _restock.Configure(Cfg.Restock, Timing);
         ApplyPerf();
+        foreach (var site in new[] { "twitch", "kick" })
+        {
+            bool on = RedeemOn(site);
+            // Ligado à mão com o buff já cobrindo o bloqueio (a interface avisou): resgata até o horário de bloqueio passar.
+            if (!firstTime && on && !_redeemSeen.GetValueOrDefault(site, true) && BuffLeft(site) is int left
+                && RedeemBlock.Covers(_host.Config.RedeemBlockAt, left, DateTime.Now))
+            {
+                _blockIgnoredUntil[site] = RedeemBlock.Next(_host.Config.RedeemBlockAt, DateTime.Now)!.Value;
+                Log.Redeem(Index, SiteName(site), "—", "bloqueio", $"resgate religado à mão; o bloqueio das {_host.Config.RedeemBlockAt} volta a valer depois desse horário");
+            }
+            _redeemSeen[site] = on;
+        }
         bool changed = !firstTime && (Cfg.Ultra != _ultraOn || Cfg.Economy != _economyOn);
         if (changed)
         {
@@ -488,7 +502,7 @@ internal sealed class Account : IDisposable
             _tp.RetryWait = TimeSpan.FromMinutes(Timing.RedeemRetryMin);
             foreach (var ch in TwitchOpen.ToList())
             {
-                await TwitchRunAsync(ch, Cfg.RedeemTwitch, spend: true);
+                await TwitchRunAsync(ch, Cfg.RedeemTwitch, spend: MaySpend("twitch"));
                 await Breather();
             }
         }
@@ -508,7 +522,7 @@ internal sealed class Account : IDisposable
             _kp.RetryWait = TimeSpan.FromMinutes(Timing.RedeemRetryMin);
             foreach (var ch in KickOpen.ToList())
             {
-                await KickRunAsync(ch, Cfg.RedeemKick, spend: true);
+                await KickRunAsync(ch, Cfg.RedeemKick, spend: MaySpend("kick"));
                 await Breather();
             }
         }
@@ -581,6 +595,8 @@ internal sealed class Account : IDisposable
                 guard.NoneNoted = true;
                 return;
             }
+            if (!MaySpend(site))
+                return;
             Log.Redeem(Index, SiteName(site), pick, "guarda", $"o bônus {kind} vence em {left / 60} min; resgatando aqui");
             bool ok = twitch ? await TwitchRunAsync(pick, kind, spend: true, claim: false) : await KickRunAsync(pick, kind, spend: true);
             guard.Reads.Remove(pick);
@@ -591,6 +607,43 @@ internal sealed class Account : IDisposable
         {
             if (twitch) _busyTwitch = false; else _busyKick = false;
         }
+    }
+
+    // ---------------- horário de bloqueio ----------------
+
+    private bool RedeemOn(string site) => site == "twitch" ? Cfg.RedeemTwitchOn : Cfg.RedeemKickOn;
+
+    /// <summary>Segundos que faltam do buff escolhido para o site, como o jogo conta; null = não dá para saber agora.</summary>
+    private int? BuffLeft(string site) =>
+        (site == "twitch" ? Cfg.RedeemTwitch : Cfg.RedeemKick) is string kind && (site == "twitch" ? State?.Twitch : State?.Kick) is { } bonus
+            ? bonus.Left.GetValueOrDefault(kind) : null;
+
+    private bool Covered(string site) => BuffLeft(site) is int left && RedeemBlock.Covers(_host.Config.RedeemBlockAt, left, DateTime.Now);
+
+    /// <summary>
+    /// Pode gastar pontos no prêmio do site agora? Com o resgate ligado, sim, a não ser que o buff que a conta já tem
+    /// passe do horário de bloqueio: aí desliga o resgate do site (até você religar) e registra.
+    /// </summary>
+    private bool MaySpend(string site)
+    {
+        if (!RedeemOn(site))
+            return false;
+        if (RedeemBlock.Next(_host.Config.RedeemBlockAt, DateTime.Now) is null || DateTime.Now < _blockIgnoredUntil.GetValueOrDefault(site))
+            return true;
+        if (BuffLeft(site) is not int left)
+            return false; // sem o tempo do buff no jogo não dá para conferir: espera a próxima volta
+        if (!RedeemBlock.Covers(_host.Config.RedeemBlockAt, left, DateTime.Now))
+            return true;
+        if (site == "twitch")
+            Cfg.RedeemTwitchOn = false;
+        else
+            Cfg.RedeemKickOn = false;
+        _redeemSeen[site] = false;
+        var kind = site == "twitch" ? Cfg.RedeemTwitch : Cfg.RedeemKick;
+        Log.Redeem(Index, SiteName(site), "—", "bloqueio",
+            $"o bônus {kind} dura até {DateTime.Now.AddSeconds(left):dd/MM HH:mm}, além do bloqueio das {_host.Config.RedeemBlockAt}: resgate desligado");
+        _host.SaveConfig();
+        return false;
     }
 
     // ---------------- interface ----------------
@@ -625,6 +678,7 @@ internal sealed class Account : IDisposable
                 perReward = v.VotesPerReward,
             },
             bonus = new { twitch = s?.Twitch?.Left, kick = s?.Kick?.Left, twitchLinked = s?.Twitch?.Linked, kickLinked = s?.Kick?.Linked },
+            blockCovered = new { twitch = Covered("twitch"), kick = Covered("kick") }, // para o aviso ao religar o resgate
             lives = new
             {
                 twitchLogged = _twitchToken is not null,

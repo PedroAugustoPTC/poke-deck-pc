@@ -25,6 +25,12 @@ public sealed class Config
     public int KickLives { get; set; } = 2; // a Kick só conta pontos de 2 lives por conta
     public bool ClaimChest { get; set; } = true;
 
+    /// <summary>
+    /// Horário de bloqueio ("HH:mm") de todas as contas, ou null: cada conta, antes de resgatar, confere se o buff que
+    /// ela já tem passa desse horário e, se passa, desliga o próprio resgate daquele site.
+    /// </summary>
+    public string? RedeemBlockAt { get; set; }
+
     public Timing Timing { get; set; } = new();
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
@@ -67,6 +73,8 @@ public sealed class Config
         Timing.Fix();
         foreach (var a in Accounts)
             a.Restock ??= new();
+        if (RedeemBlock.Next(RedeemBlockAt, DateTime.Now) is null)
+            RedeemBlockAt = null;
         return this;
     }
 
@@ -90,6 +98,10 @@ public sealed class AccountConfig
     /// <summary>O bônus do jogo resgatado com os pontos de cada site: null, "xp", "captura" ou "shiny".</summary>
     public string? RedeemTwitch { get; set; }
     public string? RedeemKick { get; set; }
+
+    /// <summary>O resgate de cada site ligado (ícone 🎁 no cabeçalho). O horário de bloqueio desliga sozinho.</summary>
+    public bool RedeemTwitchOn { get; set; } = true;
+    public bool RedeemKickOn { get; set; } = true;
 
     /// <summary>Guarda do bônus: perto de vencer, resgata num canal com pontos parados.</summary>
     public bool Guard { get; set; } = true;

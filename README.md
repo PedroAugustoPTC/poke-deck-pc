@@ -39,7 +39,13 @@ Isso dispara `.github/workflows/release.yml`, que compila com o mesmo Dockerfile
 1. Abra o exe. Entre no jogo em cada conta (o login fica no perfil da conta).
 2. **⚙ Config** → aba da conta: nome, ULTRA/Economia, recompra (confira os valores: gasta ouro de verdade), lives,
    bônus a resgatar e guarda. Aba **Lives**: canais e quantas lives; aba **Tempos**: todos os intervalos.
-3. Na conta com lives: botões **T**/**K** no cabeçalho abrem a janela para entrar na Twitch/Kick daquela conta.
+3. Na conta com lives: botões **T**/**K** no cabeçalho abrem a janela para entrar na Twitch/Kick daquela conta;
+   **🎁T**/**🎁K** ligam e desligam o resgate do bônus de cada site.
+4. **Horário de bloqueio** (Config › Lives): antes de resgatar, cada conta confere se o buff dela já passa desse horário
+   (já passou hoje → vale o de amanhã); se passa, desliga o 🎁 daquele site e registra. Religar à mão pede confirmação.
+5. **🗳** no cabeçalho: o voto no IdleHub.io liberado (ou o tempo até liberar). Clique e vote na página que abre.
+6. **⇄ Eco** na barra: o que você faz no jogo de uma conta se repete nas outras (chat, mensagens e ações num pokémon
+   específico não se repetem).
 
 Dados em `%LOCALAPPDATA%\PokeDeck` (`config.json`, `pokedeck.log`, perfis em `WebView2`). Não compartilhe essa pasta:
 tem os logins.
@@ -54,6 +60,9 @@ tem os logins.
 | Lives leves | `src/PokeDeck.Core/Twitch.cs`, `Kick.cs` | Sem vídeo: `minute-watched` (Twitch) e socket de espectador (Kick) |
 | Baú/resgates | `src/PokeDeck.Core/Points.cs`, `src/PokeDeck/AgentPage.cs` | Scripts rodando dentro do player real (escondido) do site: anti-robô e cookies do próprio site |
 | Guarda | `Account.GuardAsync` | Bônus perto de vencer → resgata num canal com pontos parados; confere no jogo |
+| Bloqueio do resgate | `src/PokeDeck.Core/RedeemBlock.cs` | Hora atual + buff que falta ≥ próximo horário de bloqueio → não resgata e desliga o 🎁 do site |
+| Voto | `src/PokeDeck.Core/IdleHub.cs` | `POST /idlehub/me` na página do jogo (o pedido da urna); o voto é feito por você na página do IdleHub |
+| Eco | `src/PokeDeck.Core/Echo.cs` | Repete no socket das outras contas as mensagens que o jogo mandou logo após um clique seu (sem cliques sintéticos) |
 | Interface | `ui/` (Svelte) | Embutida no exe; as páginas do jogo ficam por cima das vagas que ela desenha |
 
 ## Riscos

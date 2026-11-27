@@ -300,3 +300,39 @@ public class EchoTests
     public void Repeats_only_actions_valid_in_any_account(string message, bool repeat) =>
         Assert.Equal(repeat, Echo.ShouldRepeat(message));
 }
+
+public class RedeemBlockTests
+{
+    private static readonly DateTime Noon = new(2026, 11, 26, 12, 0, 0);
+
+    [Fact]
+    public void Ten_hours_left_at_noon_covers_22h()
+    {
+        Assert.True(RedeemBlock.Covers("22:00", 10 * 3600, Noon));
+        Assert.False(RedeemBlock.Covers("22:00", 9 * 3600, Noon));
+    }
+
+    [Fact]
+    public void Block_time_already_passed_today_means_tomorrow()
+    {
+        Assert.Equal(Noon.Date.AddDays(1).AddHours(8), RedeemBlock.Next("08:00", Noon));
+        Assert.False(RedeemBlock.Covers("08:00", 10 * 3600, Noon));
+        Assert.True(RedeemBlock.Covers("08:00", 20 * 3600, Noon));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("25:00")]
+    [InlineData("22h")]
+    public void No_or_bad_block_never_blocks(string? block) =>
+        Assert.False(RedeemBlock.Covers(block, 100 * 3600, Noon));
+
+    [Fact]
+    public void Old_config_keeps_redeem_on_and_bad_block_is_dropped()
+    {
+        var c = JsonSerializer.Deserialize<Config>("""{"RedeemBlockAt":"xx","Accounts":[{"Name":"A"}]}""")!.Fix();
+        Assert.True(c.Accounts[0].RedeemTwitchOn && c.Accounts[0].RedeemKickOn);
+        Assert.Null(c.RedeemBlockAt);
+    }
+}
