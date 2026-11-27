@@ -360,3 +360,15 @@ public class UpdaterTests
         Assert.False(Updater.IsNewer(new Version(0, 0, 0, 0), r));
     }
 }
+
+public class TimingTests
+{
+    [Fact]
+    public void FixSnapsFpsAndSpriteToOptions()
+    {
+        var t = new Timing { Fps = 8, SpriteMs = 700 };
+        t.Fix();
+        Assert.Equal(10, t.Fps);
+        Assert.Equal(660, t.SpriteMs);
+    }
+}

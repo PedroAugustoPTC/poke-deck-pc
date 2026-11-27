@@ -133,7 +133,7 @@
 
   // Limite de quadros (técnica do PokeIdleMulti): o requestAnimationFrame do jogo espera o próximo quadro permitido
   // por um relógio. window.__pdFps (0 ou 60+: sem limite) e window.__pdSpriteMs são lidos a cada pedido: mudam na hora.
-  // O app põe a conta em uso fluida e as outras devagar; a caça não muda, só o desenho.
+  // Vale igual para todas as contas; a caça não muda, só o desenho.
   const raf = window.requestAnimationFrame.bind(window), caf = window.cancelAnimationFrame.bind(window);
   const pending = new Map();
   let nextId = 1, due = 0, last = -1;

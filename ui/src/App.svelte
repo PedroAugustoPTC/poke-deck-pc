@@ -280,7 +280,7 @@
         {@const a = acc(i)}
         {@const c = config.Accounts[i]}
         {@const ph = PHASE[a.phase] ?? PHASE.loading}
-        <section class="pane" class:active={a.active}>
+        <section class="pane">
           <div class="head">
             <span class="dot {ph[1]}" title={ph[0]}></span>
             <strong>{c.Name}</strong>
@@ -539,10 +539,19 @@
             <label>Compras: intervalo entre pedidos (s) <input type="number" min="2" bind:value={draft.Timing.BuyGapMinSec} /> a <input type="number" min="2" bind:value={draft.Timing.BuyGapMaxSec} /></label>
             <label>Resgate recusado: tentar de novo em (min) <input type="number" min="5" bind:value={draft.Timing.RedeemRetryMin} /></label>
             <h3>Desempenho</h3>
-            <p class="muted">A conta em uso (a última que você clicou, com borda amarela) desenha fluida; as outras desenham devagar. A caça não muda.</p>
-            <label>Quadros por segundo da conta em uso (60 = sem limite) <input type="number" min="10" max="60" bind:value={draft.Timing.ActiveFps} /></label>
-            <label>Quadros por segundo das outras contas <input type="number" min="1" max="60" bind:value={draft.Timing.BackgroundFps} /></label>
-            <label>Animação dos sprites das outras contas (ms; 220 = normal) <input type="number" min="220" max="3000" step="110" bind:value={draft.Timing.BackgroundSpriteMs} /></label>
+            <p class="muted">Vale igual para todas as contas. Só muda o desenho na tela: a caça, o XP e o loot continuam iguais.</p>
+            <label>Quadros por segundo (FPS)
+              <select bind:value={draft.Timing.Fps}>
+                {#each [[10, '10 (mais leve)'], [15, '15'], [20, '20'], [30, '30'], [60, '60 (sem limite, mais pesado)']] as [v, t]}<option value={v}>{t}</option>{/each}
+              </select>
+            </label>
+            <p class="muted">Quantas vezes por segundo a tela do jogo é redesenhada. Menos FPS = menos uso de CPU/placa de vídeo, mas o movimento fica menos suave.</p>
+            <label>Animação dos sprites
+              <select bind:value={draft.Timing.SpriteMs}>
+                {#each [[220, 'Normal (como no jogo)'], [440, '2x mais lenta'], [660, '3x mais lenta'], [880, '4x mais lenta (mais leve)']] as [v, t]}<option value={v}>{t}</option>{/each}
+              </select>
+            </label>
+            <p class="muted">Sprites são os desenhos dos Pokémon e do treinador. Eles "se mexem" trocando de desenho a cada 220 ms (≈4,5 vezes por segundo). Deixar a animação mais lenta faz essa troca acontecer menos vezes: o Pokémon parece mais parado, mas o PC trabalha menos. Não afeta os ataques nem a caça.</p>
           </div>
         {/if}
       </div>
@@ -576,7 +585,6 @@
   .deck.cols { grid-template-columns: repeat(var(--n), 1fr); }
   .deck.focus { grid-template-columns: 1fr; }
   .pane { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border: 2px solid var(--grain); border-radius: 4px; overflow: hidden; }
-  .pane.active { border-color: var(--accent); }
   .head { display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; flex-wrap: wrap; background: var(--panel-2); border-bottom: 1px solid var(--grain); font-size: 13px; }
   .head strong { font-size: 14px; }
   .body { flex: 1; position: relative; min-height: 0; background: var(--bg); }

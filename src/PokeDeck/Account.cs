@@ -84,7 +84,6 @@ internal sealed class Account : IDisposable
             if (!e.IsRedirected)
                 SetPhase("loading");
         };
-        view.GotFocus += (_, _) => _host.SetActive(Index);
         core.NavigationCompleted += (_, e) =>
         {
             _loadedAt = DateTime.Now;
@@ -134,7 +133,6 @@ internal sealed class Account : IDisposable
         State = null;
         Vote = null;
         _voteCheckAt = default;
-        Active = false;
         _prefsScriptId = null;
         Phase = "off";
     }
@@ -205,21 +203,8 @@ internal sealed class Account : IDisposable
     /// <summary>As extensões do perfil desta conta (relido depois de instalar, ligar/desligar ou remover).</summary>
     public List<ExtInfo> Extensions { get; set; } = new();
 
-    /// <summary>A conta em uso (a última clicada): desenha fluida; as outras ficam no limite de fundo.</summary>
-    public bool Active { get; private set; }
-
-    public void SetActive(bool active)
-    {
-        Active = active;
-        ApplyPerf();
-    }
-
-    private void ApplyPerf()
-    {
-        int fps = Active ? Timing.ActiveFps : Timing.BackgroundFps;
-        int sprite = Active ? 220 : Timing.BackgroundSpriteMs;
-        _ = Game?.CoreWebView2?.ExecuteScriptAsync($"window.__pdFps={fps};window.__pdSpriteMs={sprite}");
-    }
+    private void ApplyPerf() =>
+        _ = Game?.CoreWebView2?.ExecuteScriptAsync($"window.__pdFps={Timing.Fps};window.__pdSpriteMs={Timing.SpriteMs}");
 
     public void Send(string message) =>
         _ = Game?.CoreWebView2?.ExecuteScriptAsync($"window.__pd && window.__pd.send({JsonSerializer.Serialize(message)})");
@@ -656,7 +641,6 @@ internal sealed class Account : IDisposable
         {
             i = Index,
             phase = Phase,
-            active = Active,
             extensions = Extensions,
             gold = s?.Gold,
             restock = new { paused = _restock.Paused, potion = _restock.PotionPick },

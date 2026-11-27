@@ -245,15 +245,6 @@ internal sealed class MainForm : Form
         Post(new { t = "fullscreen", on = _windowed is not null });
     }
 
-    /// <summary>A conta em uso fica fluida; as outras no limite de fundo.</summary>
-    public void SetActive(int index)
-    {
-        if (_accounts[index].Active)
-            return;
-        foreach (var a in _accounts)
-            a.SetActive(a.Index == index);
-    }
-
     private void Post(object message)
     {
         if (_ui?.CoreWebView2 is CoreWebView2 core)
@@ -383,11 +374,6 @@ internal sealed class MainForm : Form
             else
                 await a.ApplyPrefsAsync();
         }
-        var running = _accounts.Where(a => a.Game is not null).ToList();
-        if (Config.Layout == "focus" && running.Any(a => a.Index == Config.Focus))
-            SetActive(Config.Focus);
-        else if (running.Count > 0 && !running.Any(a => a.Active))
-            SetActive(running[0].Index);
         Post(new { t = "config", config = Config });
         // conta recém-ligada abre as lives já, sem esperar a próxima conferência (~2 min)
         bool livesChanged = started || !old.TwitchChannels.SequenceEqual(Config.TwitchChannels) || !old.KickChannels.SequenceEqual(Config.KickChannels)
