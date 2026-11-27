@@ -46,7 +46,11 @@ public sealed class Config
         try
         {
             if (File.Exists(path) && JsonSerializer.Deserialize<Config>(File.ReadAllText(path)) is Config c)
-                return c.Fix();
+            {
+                foreach (var a in c.Fix().Accounts)
+                    a.Muted = false; // o app sempre abre com som; o Mudo vale só até fechar
+                return c;
+            }
         }
         catch (JsonException)
         {
@@ -96,7 +100,7 @@ public sealed class AccountConfig
     public bool Ultra { get; set; }
     public bool Economy { get; set; }
     public bool ReduceMotion { get; set; } = true;
-    public bool Muted { get; set; } = true;
+    public bool Muted { get; set; }
     public double Zoom { get; set; } = 1;
 
     /// <summary>Esta conta assiste às lives (a conta do jogo vinculada à Twitch/Kick logada nela).</summary>
